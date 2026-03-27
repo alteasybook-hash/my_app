@@ -1,6 +1,7 @@
 # Sécurité
 .env
-.env.secret# Nettoyage Android (TRÈS IMPORTANT)
+.env.secret
+# Nettoyage Android (TRÈS IMPORTANT)
 .gradle/
 build/
 android/build/
