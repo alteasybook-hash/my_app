@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "983402703828",
+    "project_id": "alt-app-8ccfc",
+    "storage_bucket": "alt-app-8ccfc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:983402703828:android:348f6db74dc02831200441",
+        "android_client_info": {
+          "package_name": "altassistante.fr.my_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkUZUf37v2AIdBLj0xANByeYB-tSdtX1w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:983402703828:android:db3a058a71a57a64200441",
+        "android_client_info": {
+          "package_name": "com.alt.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkUZUf37v2AIdBLj0xANByeYB-tSdtX1w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,64 @@
+# Sécurité
+.env
+.env.secret# Nettoyage Android (TRÈS IMPORTANT)
+.gradle/
+build/
+android/build/
+android/.gradle/
+ios/DerivedData/
+
+# Flutter
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+
+
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.pub-cache/
+.pub/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+.env.secret
+ios/Flutter/Generated.xcconfig
+secret.json
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+android/key.properties

@@ -1,0 +1,158 @@
+import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
+import '../dashboard/dashboard_page.dart';
+import 'home_page.dart';
+
+
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
+  late AnimationController _moveController;
+  late AnimationController _rotateController;
+  late AnimationController _fadeController;
+
+  late Animation<Offset> _moveAnimation;
+  late Animation<double> _rotateAnimation;
+  late Animation<double> _fadeAnimation;
+
+  bool _isLogin = true;
+  bool _isLoading = false;
+
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _companyController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _moveController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+    _moveAnimation = Tween<Offset>(begin: const Offset(3.0, 0.0), end: Offset.zero).animate(
+      CurvedAnimation(parent: _moveController, curve: Curves.easeOutCubic),
+    );
+
+    _rotateController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _rotateAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _rotateController, curve: Curves.easeInOut),
+    );
+
+    _fadeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
+    );
+
+    _runAnimationSequence();
+  }
+
+  void _runAnimationSequence() async {
+    await _moveController.forward();
+    await _rotateController.forward();
+    if (mounted) {
+      _fadeController.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _moveController.dispose();
+    _rotateController.dispose();
+    _fadeController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _companyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleAuth() async {
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(seconds: 1));
+    if (!mounted) return;
+
+    if (_emailController.text.contains('@') && _passwordController.text.length > 3) {
+      if (!_isLogin && _passwordController.text != _confirmPasswordController.text) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mots de passe différents'), backgroundColor: Colors.redAccent));
+      } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DashboardPage()));
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez entrer des identifiants valides'), backgroundColor: Colors.orange));
+    }
+    setState(() => _isLoading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 30),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SlideTransition(position: _moveAnimation, child: RotationTransition(turns: _rotateAnimation, child: const Text('alt.', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: -1.2)))),
+                const SizedBox(height: 10),
+                FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Column(
+                    children: [
+                      const Text('votre assistante personnelle', style: TextStyle(fontSize: 16, color: Colors.black54, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 4),
+                      const Text('Gérer votre vie pro et perso en un seul endroit', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
+                      const SizedBox(height: 40),
+                      if (!_isLogin) ...[
+                        _buildField(_firstNameController, 'Prénom', Icons.person_outline),
+                        const SizedBox(height: 12),
+                        _buildField(_lastNameController, 'Nom', Icons.person_outline),
+                        const SizedBox(height: 12),
+                        _buildField(_companyController, 'Raison Sociale (Optionnel)', Icons.business_outlined),
+                        const SizedBox(height: 12),
+                      ],
+                      _buildField(_emailController, t.email, Icons.email_outlined),
+                      const SizedBox(height: 12),
+                      _buildField(_passwordController, t.password, Icons.lock_outline, isPassword: true),
+                      if (!_isLogin) ...[
+                        const SizedBox(height: 12),
+                        _buildField(_confirmPasswordController, 'Confirmer le mot de passe', Icons.lock_reset, isPassword: true),
+                      ],
+                      const SizedBox(height: 24),
+                      SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: _isLoading ? null : _handleAuth, style: ElevatedButton.styleFrom(backgroundColor: Colors.black, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: _isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Text(_isLogin ? t.login : 'S\'inscrire', style: const TextStyle(fontWeight: FontWeight.bold)))),
+                      const SizedBox(height: 16),
+                      // Correction ici : On remplace le chargement réseau par une icône statique pour éviter l'erreur 429
+                      OutlinedButton.icon(
+                        onPressed: () {},
+                        icon: const Icon(Icons.g_mobiledata, size: 28),
+                        label: Text(_isLogin ? 'Continuer avec Google' : 'S\'inscrire avec Google'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      ),
+                      const SizedBox(height: 20),
+                      TextButton(onPressed: () => setState(() => _isLogin = !_isLogin), child: Text(_isLogin ? '${t.dontHaveAccount} ${t.register}' : 'Déjà inscrit ? Se connecter', style: const TextStyle(color: Colors.black))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildField(TextEditingController controller, String label, IconData icon, {bool isPassword = false}) {
+    return TextField(controller: controller, obscureText: isPassword, decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, size: 18, color: Colors.black54), filled: true, fillColor: Colors.grey[50], border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)));
+  }
+}
