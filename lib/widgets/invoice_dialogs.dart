@@ -6,9 +6,11 @@ import '../models/journal_entry.dart';
 import '../models/account.dart';
 import '../models/entity.dart';
 import '../models/payment.dart';
+import '../services/api_service.dart';
 
 class InvoiceDialogs {
   static const Color primaryColor = Color(0xFF49F6C7);
+  static final ApiService _apiService = ApiService();
 
   /// --- 1. FORMULAIRE PARTENAIRE ---
   static Future<Supplier?> showPartnerForm({
@@ -121,7 +123,7 @@ class InvoiceDialogs {
     String? selectedAccount = invoiceToEdit?.expenseAccount;
     String? paymentTerms = invoiceToEdit?.paymentTerms ?? '30 jours';
     String? linkedQuoteNumber = invoiceToEdit?.linkedQuoteNumber;
-    
+
     List<Payment> localPayments = invoiceToEdit != null ? List.from(invoiceToEdit.payments) : [];
 
     final filteredAccounts = accounts.where((a) => type == InvoiceType.achat ? a.type == 'charge' : a.type == 'produit').toList();
@@ -197,60 +199,19 @@ class InvoiceDialogs {
                     decoration: InputDecoration(labelText: type == InvoiceType.achat ? 'Fournisseur *' : 'Client *'),
                   ),
                   const SizedBox(height: 16),
-
-                  // Remplacez le Dropdown des conditions de paiement par celui-ci :
                   DropdownButtonFormField<String>(
-                    value: [
-                      'Immédiat',
-                      '15 jours',
-                      '30 jours',
-                      '45 jours fin de mois',
-                      '60 jours'
-                    ].contains(paymentTerms)
-                        ? paymentTerms
-                        : '30 jours', // Valeur de repli si non trouvé
-                    items: [
-                      'Immédiat',
-                      '15 jours',
-                      '30 jours',
-                      '45 jours fin de mois',
-                      '60 jours'
-                    ]
-                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                        .toList(),
-                    onChanged: isReadOnly ? null : (v) {
-                      setS(() {
-                        paymentTerms = v;
-                        updateDueDate();
-                      });
-                    },
-                    decoration: const InputDecoration(
-                        labelText: 'Conditions de paiement'),
+                    value: ['Immédiat', '15 jours', '30 jours', '45 jours fin de mois', '60 jours'].contains(paymentTerms) ? paymentTerms : '30 jours',
+                    items: ['Immédiat', '15 jours', '30 jours', '45 jours fin de mois', '60 jours'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                    onChanged: isReadOnly ? null : (v) { setS(() { paymentTerms = v; updateDueDate(); }); },
+                    decoration: const InputDecoration(labelText: 'Conditions de paiement'),
                   ),
-
                   if (type == InvoiceType.vente) ...[
                     const SizedBox(height: 16),
-                    // Remplacez le bloc Dropdown du devis par celui-ci :
                     DropdownButtonFormField<String>(
-                      // Sécurité : on vérifie si la valeur existe vraiment dans la liste
-                      value: (linkedQuoteNumber != null && quotes.any((q) =>
-                      q['number'].toString() == linkedQuoteNumber.toString()))
-                          ? linkedQuoteNumber.toString()
-                          : null,
-                      items: [
-                        const DropdownMenuItem<String>(value: null, child: Text(
-                            "Aucun devis lié")),
-                        ...quotes.map((q) =>
-                            DropdownMenuItem<String>(
-                              value: q['number'].toString(),
-                              // On force en String pour la comparaison
-                              child: Text("Devis n° ${q['number']}"),
-                            )),
-                      ],
-                      onChanged: isReadOnly ? null : (v) =>
-                          setS(() => linkedQuoteNumber = v),
-                      decoration: const InputDecoration(
-                          labelText: 'Lier à un devis'),
+                      value: (linkedQuoteNumber != null && quotes.any((q) => q['number'].toString() == linkedQuoteNumber.toString())) ? linkedQuoteNumber.toString() : null,
+                      items: [const DropdownMenuItem<String>(value: null, child: Text("Aucun devis lié")), ...quotes.map((q) => DropdownMenuItem<String>(value: q['number'].toString(), child: Text("Devis n° ${q['number']}")))],
+                      onChanged: isReadOnly ? null : (v) => setS(() => linkedQuoteNumber = v),
+                      decoration: const InputDecoration(labelText: 'Lier à un devis'),
                     ),
                   ],
                   const SizedBox(height: 16),
@@ -289,36 +250,22 @@ class InvoiceDialogs {
                   const SizedBox(height: 16),
                   TextField(controller: numC, readOnly: isReadOnly, decoration: const InputDecoration(labelText: 'N° facture *')),
                   const SizedBox(height: 16),
-                  // Remplacez le Dropdown des comptes par celui-ci :
                   DropdownButtonFormField<String>(
-                    // Sécurité : si le compte sélectionné n'est pas dans la liste, on met null ou le premier par défaut
-                    value: filteredAccounts.any((a) =>
-                    a.number == selectedAccount)
-                        ? selectedAccount
-                        : (filteredAccounts.isNotEmpty ? filteredAccounts.first
-                        .number : null),
-                    items: filteredAccounts.map((a) =>
-                        DropdownMenuItem(
-                            value: a.number,
-                            child: Text(a.toString(),
-                                style: const TextStyle(fontSize: 12))
-                        )).toList(),
-                    onChanged: isReadOnly ? null : (v) =>
-                        setS(() => selectedAccount = v),
-                    decoration: InputDecoration(
-                        labelText: type == InvoiceType.achat
-                            ? 'Compte de charge *'
-                            : 'Compte de produit *'
-                    ),
+                    value: filteredAccounts.any((a) => a.number == selectedAccount) ? selectedAccount : (filteredAccounts.isNotEmpty ? filteredAccounts.first.number : null),
+                    items: filteredAccounts.map((a) => DropdownMenuItem(value: a.number, child: Text(a.toString(), style: const TextStyle(fontSize: 12)))).toList(),
+                    onChanged: isReadOnly ? null : (v) => setS(() => selectedAccount = v),
+                    decoration: InputDecoration(labelText: type == InvoiceType.achat ? 'Compte de charge *' : 'Compte de produit *'),
                   ),
-
                   const SizedBox(height: 16),
                   TextField(controller: desC, readOnly: isReadOnly, decoration: const InputDecoration(labelText: 'Désignation')),
                   const SizedBox(height: 16),
                   Row(children: [
-                    Expanded(flex: 2, child: TextField(controller: htC, readOnly: isReadOnly, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Montant HT *'), onChanged: (_) => setS(() {}))),
-                    const SizedBox(width: 10),
-                    Expanded(child: DropdownButtonFormField<double>(value: [20.0, 10.0, 5.5, 0.0].contains(tvaR) ? tvaR : 20.0, items: [20.0, 10.0, 5.5, 0.0].map((t) => DropdownMenuItem(value: t, child: Text('TVA $t%'))).toList(), onChanged: isReadOnly ? null : (v) => setS(() => tvaR = v!), decoration: const InputDecoration(labelText: 'Taux'))),
+                    Expanded(flex: 3, child: Container(margin: const EdgeInsets.only(right: 8), child: TextField(controller: htC, readOnly: isReadOnly, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Montant HT *'), onChanged: (_) => setS(() {})))),
+                    Expanded(flex: 2, child: _buildTaxDropdown(
+                        value: tvaR,
+                        isReadOnly: isReadOnly,
+                        onChanged: (v) => setS(() => tvaR = v!)
+                    )),
                   ]),
                   const SizedBox(height: 24),
                   Container(
@@ -335,9 +282,7 @@ class InvoiceDialogs {
                               const SizedBox(width: 8),
                               DropdownButton<String>(
                                 value: ['EUR', 'USD', 'GBP', 'CHF'].contains(curr) ? curr : 'EUR',
-                                dropdownColor: Colors.black,
-                                underline: Container(),
-                                style: const TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+                                dropdownColor: Colors.black, underline: Container(), style: const TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
                                 items: ['EUR', 'USD', 'GBP', 'CHF'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                                 onChanged: isReadOnly ? null : (v) => setS(() => curr = v!),
                               ),
@@ -350,10 +295,8 @@ class InvoiceDialogs {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("RÉGLÉ : ${totalPaid.toStringAsFixed(2)} $curr",
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 12)),
-                            Text("À PAYER : ${remaining.toStringAsFixed(2)} $curr",
-                                style: TextStyle(color: remaining > 0.01 ? Colors.red : Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                            Text("RÉGLÉ : ${totalPaid.toStringAsFixed(2)} $curr", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 12)),
+                            Text("À PAYER : ${remaining.toStringAsFixed(2)} $curr", style: TextStyle(color: remaining > 0.01 ? Colors.red : Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -377,16 +320,7 @@ class InvoiceDialogs {
                             onPressed: () => _showAddPaymentDialog(context, remaining, curr, bankAccounts, (amt, payCurr, rate, bankId, date) {
                               setS(() {
                                 localPayments.add(Payment(
-                                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                                  amount: amt,
-                                  currency: payCurr,
-                                  exchangeRate: rate,
-                                  amountBaseCurrency: payCurr == curr ? amt : amt * rate,
-                                  date: date,
-                                  method: 'Virement',
-                                  linkedInvoiceId: invoiceToEdit?.id ?? 'temp',
-                                  type: type == InvoiceType.achat ? PaymentType.fournisseur : PaymentType.client,
-                                  bankAccountId: bankId,
+                                  id: DateTime.now().millisecondsSinceEpoch.toString(), amount: amt, currency: payCurr, exchangeRate: rate, amountBaseCurrency: payCurr == curr ? amt : amt * rate, date: date, method: 'Virement', linkedInvoiceId: invoiceToEdit?.id ?? 'temp', type: type == InvoiceType.achat ? PaymentType.fournisseur : PaymentType.client, bankAccountId: bankId,
                                 ));
                               });
                             }),
@@ -408,27 +342,7 @@ class InvoiceDialogs {
                         InvoiceStatus finalStatus = InvoiceStatus.pending;
                         if (totalPaid >= ttc - 0.01) finalStatus = InvoiceStatus.paid;
                         else if (totalPaid > 0) finalStatus = InvoiceStatus.partiallyPaid;
-
-                        onSave(Invoice(
-                          id: invoiceToEdit?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                          number: numC.text,
-                          supplierOrClientName: contact!,
-                          supplierOrClientId: selectedPartnerId!,
-                          amountHT: ht,
-                          tva: ht * tvaR / 100,
-                          amountTTC: ttc,
-                          currency: curr,
-                          date: invoiceDate,
-                          dueDate: dueDate,
-                          type: type,
-                          entityId: entityId!,
-                          designation: desC.text,
-                          expenseAccount: selectedAccount,
-                          paymentTerms: paymentTerms,
-                          linkedQuoteNumber: linkedQuoteNumber,
-                          payments: localPayments,
-                          status: finalStatus,
-                        ));
+                        onSave(Invoice(id: invoiceToEdit?.id ?? DateTime.now().millisecondsSinceEpoch.toString(), number: numC.text, supplierOrClientName: contact!, supplierOrClientId: selectedPartnerId!, amountHT: ht, tva: ht * tvaR / 100, amountTTC: ttc, currency: curr, date: invoiceDate, dueDate: dueDate, type: type, entityId: entityId!, designation: desC.text, expenseAccount: selectedAccount, paymentTerms: paymentTerms, linkedQuoteNumber: linkedQuoteNumber, payments: localPayments, status: finalStatus));
                         Navigator.pop(ctx);
                       },
                       child: const Text('ENREGISTRER', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -448,7 +362,6 @@ class InvoiceDialogs {
     String selectedCurrency = baseCurrency;
     String? selectedBankId = bankAccounts.isNotEmpty ? bankAccounts.first.id : null;
     DateTime date = DateTime.now();
-
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -456,7 +369,6 @@ class InvoiceDialogs {
           double amt = double.tryParse(amountC.text.replaceAll(',', '.')) ?? 0.0;
           double rate = double.tryParse(rateC.text.replaceAll(',', '.')) ?? 1.0;
           double converted = selectedCurrency == baseCurrency ? amt : amt * rate;
-
           return AlertDialog(
             title: const Text("Ajouter un règlement"),
             content: SingleChildScrollView(
@@ -465,74 +377,25 @@ class InvoiceDialogs {
                 children: [
                   Text("Montant restant : ${remaining.toStringAsFixed(2)} $baseCurrency", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: TextField(
-                          controller: amountC,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(labelText: "Montant"),
-                          onChanged: (_) => setS(() {}),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: ['EUR', 'USD', 'GBP', 'CHF'].contains(selectedCurrency) ? selectedCurrency : 'EUR',
-                          items: ['EUR', 'USD', 'GBP', 'CHF'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                          onChanged: (v) => setS(() => selectedCurrency = v!),
-                          decoration: const InputDecoration(labelText: "Devise"),
-                        ),
-                      ),
-                    ],
-                  ),
+                  Row(children: [
+                    Expanded(flex: 2, child: TextField(controller: amountC, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: "Montant"), onChanged: (_) => setS(() {}))),
+                    const SizedBox(width: 8),
+                    Expanded(child: DropdownButtonFormField<String>(value: ['EUR', 'USD', 'GBP', 'CHF'].contains(selectedCurrency) ? selectedCurrency : 'EUR', items: ['EUR', 'USD', 'GBP', 'CHF'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(), onChanged: (v) => setS(() => selectedCurrency = v!), decoration: const InputDecoration(labelText: "Devise"))),
+                  ]),
                   if (selectedCurrency != baseCurrency) ...[
                     const SizedBox(height: 16),
-                    TextField(
-                      controller: rateC,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(labelText: "Taux de change (1 $selectedCurrency = ? $baseCurrency)"),
-                      onChanged: (_) => setS(() {}),
-                    ),
+                    TextField(controller: rateC, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: "Taux de change (1 $selectedCurrency = ? $baseCurrency)"), onChanged: (_) => setS(() {})),
                     const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      color: Colors.grey[100],
-                      child: Text("Soit ${converted.toStringAsFixed(2)} $baseCurrency", style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ),
+                    Container(padding: const EdgeInsets.all(8), color: Colors.grey[100], child: Text("Soit ${converted.toStringAsFixed(2)} $baseCurrency", style: const TextStyle(fontWeight: FontWeight.bold))),
                   ],
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: bankAccounts.any((a) => a.id == selectedBankId) ? selectedBankId : (bankAccounts.isNotEmpty ? bankAccounts.first.id : null),
-                    items: bankAccounts.map((a) => DropdownMenuItem(value: a.id, child: Text("${a.number} - ${a.name}"))).toList(),
-                    onChanged: (v) => setS(() => selectedBankId = v),
-                    decoration: const InputDecoration(labelText: "Compte bancaire"),
-                  ),
+                  DropdownButtonFormField<String>(value: bankAccounts.any((a) => a.id == selectedBankId) ? selectedBankId : (bankAccounts.isNotEmpty ? bankAccounts.first.id : null), items: bankAccounts.map((a) => DropdownMenuItem(value: a.id, child: Text("${a.number} - ${a.name}"))).toList(), onChanged: (v) => setS(() => selectedBankId = v), decoration: const InputDecoration(labelText: "Compte bancaire")),
                   const SizedBox(height: 16),
-                  InkWell(
-                    onTap: () async {
-                      final d = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2030));
-                      if (d != null) setS(() => date = d);
-                    },
-                    child: InputDecorator(decoration: const InputDecoration(labelText: "Date"), child: Text(DateFormat('dd/MM/yyyy').format(date))),
-                  ),
+                  InkWell(onTap: () async { final d = await showDatePicker(context: context, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2030)); if (d != null) setS(() => date = d); }, child: InputDecorator(decoration: const InputDecoration(labelText: "Date"), child: Text(DateFormat('dd/MM/yyyy').format(date)))),
                 ],
               ),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ANNULER")),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-                onPressed: () {
-                  if (amt > 0 && selectedBankId != null) {
-                    onAdd(amt, selectedCurrency, rate, selectedBankId!, date);
-                    Navigator.pop(ctx);
-                  }
-                },
-                child: const Text("AJOUTER", style: TextStyle(color: Colors.black)),
-              ),
-            ],
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ANNULER")), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: primaryColor), onPressed: () { if (amt > 0 && selectedBankId != null) { onAdd(amt, selectedCurrency, rate, selectedBankId!, date); Navigator.pop(ctx); } }, child: const Text("AJOUTER", style: TextStyle(color: Colors.black)))],
           );
         },
       ),
@@ -552,10 +415,8 @@ class InvoiceDialogs {
     final amountC = TextEditingController(text: remaining.toStringAsFixed(2));
     final rateC = TextEditingController(text: "1.0");
     String selectedCurrency = invoice.currency;
-
     final bankAccounts = accounts.where((a) => a.type == 'banque' || a.number.startsWith('512')).toList();
     if (bankAccounts.isNotEmpty) selectedBankId = bankAccounts.first.id;
-
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -563,7 +424,6 @@ class InvoiceDialogs {
           double amt = double.tryParse(amountC.text.replaceAll(',', '.')) ?? 0.0;
           double rate = double.tryParse(rateC.text.replaceAll(',', '.')) ?? 1.0;
           double converted = selectedCurrency == invoice.currency ? amt : amt * rate;
-
           return AlertDialog(
             title: Text(invoice.type == InvoiceType.achat ? "Règlement Fournisseur" : "Encaissement Client"),
             content: SingleChildScrollView(
@@ -571,85 +431,33 @@ class InvoiceDialogs {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text("N° ${invoice.number} - ${invoice.supplierOrClientName}", style: const TextStyle(fontSize: 12)),
-                  Text("Total TTC : ${invoice.amountTTC.toStringAsFixed(2)} ${invoice.currency}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text("Reste : ${invoice.remainingAmount.toStringAsFixed(2)} ${invoice.currency}", style: const TextStyle(color: Colors.red, fontSize: 11)),
                   const Divider(),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: TextField(
-                          controller: amountC,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(labelText: "Montant payé"),
-                          onChanged: (_) => setS(() {}),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: ['EUR', 'USD', 'GBP', 'CHF'].contains(selectedCurrency) ? selectedCurrency : 'EUR',
-                          items: ['EUR', 'USD', 'GBP', 'CHF'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                          onChanged: (v) => setS(() => selectedCurrency = v!),
-                          decoration: const InputDecoration(labelText: "Devise"),
-                        ),
-                      ),
-                    ],
-                  ),
+                  Row(children: [
+                    Expanded(flex: 2, child: TextField(controller: amountC, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: "Montant payé"), onChanged: (_) => setS(() {}))),
+                    const SizedBox(width: 8),
+                    Expanded(child: DropdownButtonFormField<String>(value: ['EUR', 'USD', 'GBP', 'CHF'].contains(selectedCurrency) ? selectedCurrency : 'EUR', items: ['EUR', 'USD', 'GBP', 'CHF'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(), onChanged: (v) => setS(() => selectedCurrency = v!), decoration: const InputDecoration(labelText: "Devise"))),
+                  ]),
                   if (selectedCurrency != invoice.currency) ...[
                     const SizedBox(height: 16),
-                    TextField(
-                      controller: rateC,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(labelText: "Taux de change (1 $selectedCurrency = ? ${invoice.currency})"),
-                      onChanged: (_) => setS(() {}),
-                    ),
+                    TextField(controller: rateC, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: "Taux de change (1 $selectedCurrency = ? ${invoice.currency})"), onChanged: (_) => setS(() {})),
                     const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      width: double.infinity,
-                      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)),
-                      child: Text("Equivalent : ${converted.toStringAsFixed(2)} ${invoice.currency}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    ),
+                    Container(padding: const EdgeInsets.all(8), width: double.infinity, decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)), child: Text("Equivalent : ${converted.toStringAsFixed(2)} ${invoice.currency}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                   ],
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: bankAccounts.any((a) => a.id == selectedBankId) ? selectedBankId : (bankAccounts.isNotEmpty ? bankAccounts.first.id : null),
-                    items: bankAccounts.map((a) => DropdownMenuItem(value: a.id, child: Text("${a.number} - ${a.name}"))).toList(),
-                    onChanged: (v) => setS(() => selectedBankId = v),
-                    decoration: const InputDecoration(labelText: "Compte bancaire"),
-                  ),
+                  DropdownButtonFormField<String>(value: bankAccounts.any((a) => a.id == selectedBankId) ? selectedBankId : (bankAccounts.isNotEmpty ? bankAccounts.first.id : null), items: bankAccounts.map((a) => DropdownMenuItem(value: a.id, child: Text("${a.number} - ${a.name}"))).toList(), onChanged: (v) => setS(() => selectedBankId = v), decoration: const InputDecoration(labelText: "Compte bancaire")),
                   const SizedBox(height: 16),
-                  InkWell(
-                    onTap: () async {
-                      final d = await showDatePicker(context: context, initialDate: paymentDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
-                      if (d != null) setS(() => paymentDate = d);
-                    },
-                    child: InputDecorator(decoration: const InputDecoration(labelText: "Date"), child: Text(DateFormat('dd/MM/yyyy').format(paymentDate))),
-                  ),
+                  InkWell(onTap: () async { final d = await showDatePicker(context: context, initialDate: paymentDate, firstDate: DateTime(2020), lastDate: DateTime(2030)); if (d != null) setS(() => paymentDate = d); }, child: InputDecorator(decoration: const InputDecoration(labelText: "Date"), child: Text(DateFormat('dd/MM/yyyy').format(paymentDate)))),
                 ],
               ),
             ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ANNULER")),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-                onPressed: () {
-                  if (selectedBankId == null || amt <= 0) return;
-                  onPaid(selectedBankId!, paymentDate, amt, selectedCurrency, rate);
-                  Navigator.pop(ctx);
-                },
-                child: const Text("VALIDER", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-              ),
-            ],
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ANNULER")), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: primaryColor), onPressed: () { if (selectedBankId == null || amt <= 0) return; onPaid(selectedBankId!, paymentDate, amt, selectedCurrency, rate); Navigator.pop(ctx); }, child: const Text("VALIDER", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))],
           );
         },
       ),
     );
   }
 
-  /// --- 5. FORMULAIRE SAISIE JOURNAL COMPTABLE (OD) ---
+  /// --- 5. FORMULAIRE SAISIE JOURNAL COMPTABLE (Style NetSuite) ---
   static void showJournalEntryForm({
     required BuildContext context,
     JournalEntry? entry,
@@ -663,9 +471,12 @@ class InvoiceDialogs {
     String? entityId = entry?.entityId ?? (entities.isNotEmpty ? entities.first.id : null);
     DateTime entryDate = entry?.date ?? DateTime.now();
 
-    List<JournalLine> lines = entry != null
-        ? List.from(entry.lines)
-        : [
+    // Logique NetSuite : Devise de la transaction et Taux
+    String transactionCurrency = 'EUR';
+    double exchangeRate = 1.0;
+    final rateController = TextEditingController(text: "1.0");
+
+    List<JournalLine> lines = entry != null ? List.from(entry.lines) : [
       JournalLine(accountCode: '', description: '', debit: 0, credit: 0),
       JournalLine(accountCode: '', description: '', debit: 0, credit: 0),
     ];
@@ -673,141 +484,205 @@ class InvoiceDialogs {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) {
           double totalDebit = lines.fold(0, (sum, l) => sum + l.debit);
           double totalCredit = lines.fold(0, (sum, l) => sum + l.credit);
           bool isBalanced = (totalDebit - totalCredit).abs() < 0.01;
 
+          Entity? currentEntity = entities.firstWhere((e) => e.id == entityId, orElse: () => entities.first);
+          bool showExchangeRate = transactionCurrency != currentEntity.currency;
+
           return Container(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(entry == null ? 'Nouvelle Opération Diverse (OD)' : 'Modifier OD',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 24),
-                  DropdownButtonFormField<String>(
-                    value: entities.any((e) => e.id == entityId) ? entityId : (entities.isNotEmpty ? entities.first.id : null),
-                    decoration: const InputDecoration(labelText: 'Entité (Émetteur) *'),
-                    items: entities.map((e) => DropdownMenuItem(value: e.id, child: Text(e.name))).toList(),
-                    onChanged: isReadOnly ? null : (v) => setS(() => entityId = v),
-                  ),
-                  const SizedBox(height: 16),
-                  InkWell(
-                    onTap: isReadOnly ? null : () async {
-                      final d = await showDatePicker(
-                          context: context,
-                          initialDate: entryDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030)
-                      );
-                      if (d != null) setS(() => entryDate = d);
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Date d\'écriture *'),
-                      child: Text(DateFormat('dd/MM/yyyy').format(entryDate)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(controller: journalNumC, readOnly: isReadOnly, decoration: const InputDecoration(labelText: 'N° OD (ex: OD-0001)')),
-                  const SizedBox(height: 24),
-                  const Text("Lignes comptables", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 16),
-                  ...lines.asMap().entries.map((item) {
-                    int idx = item.key;
-                    JournalLine line = item.value;
-                    return Column(
+            height: MediaQuery.of(ctx).size.height * 0.85,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Journal Entry', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+                const Divider(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // PRIMARY INFORMATION (Header)
+                        const SizedBox(height: 10),
                         Row(
                           children: [
-                            Expanded(
-                              flex: 2,
-                              child: DropdownButtonFormField<String>(
-                                value: accounts.any((a) => a.number == line.accountCode) ? line.accountCode : null,
-                                items: accounts.map((a) => DropdownMenuItem(value: a.number, child: Text(a.number, style: const TextStyle(fontSize: 11)))).toList(),
-                                onChanged: isReadOnly ? null : (v) => setS(() => lines[idx].accountCode = v!),
-                                decoration: const InputDecoration(labelText: "Compte"),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                readOnly: isReadOnly,
-                                onChanged: (v) => lines[idx].description = v,
-                                controller: TextEditingController(text: line.description)..selection = TextSelection.collapsed(offset: line.description.length),
-                                decoration: const InputDecoration(labelText: "Libellé"),
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
+                            Expanded(child: DropdownButtonFormField<String>(
+                              value: entityId,
+                              decoration: const InputDecoration(labelText: 'Subsidiary (Entity) *', border: OutlineInputBorder()),
+                              items: entities.map((e) => DropdownMenuItem(value: e.id, child: Text(e.name, style: const TextStyle(fontSize: 12)))).toList(),
+                              onChanged: isReadOnly ? null : (v) => setS(() => entityId = v),
+                            )),
+                            const SizedBox(width: 12),
+                            Expanded(child: InkWell(
+                              onTap: isReadOnly ? null : () async {
+                                final d = await showDatePicker(context: context, initialDate: entryDate, firstDate: DateTime(2020), lastDate: DateTime(2100));
+                                if (d != null) setS(() => entryDate = d);
+                              },
+                              child: InputDecorator(decoration: const InputDecoration(labelText: 'Date *', border: OutlineInputBorder()), child: Text(DateFormat('dd/MM/yyyy').format(entryDate))),
+                            )),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
-                            Expanded(child: TextField(
-                              readOnly: isReadOnly,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(labelText: "Débit"),
-                              onChanged: (v) => setS(() => lines[idx].debit = double.tryParse(v.replaceAll(',', '.')) ?? 0),
+                            Expanded(child: TextField(controller: journalNumC, readOnly: isReadOnly, decoration: const InputDecoration(labelText: 'Entry No.', border: OutlineInputBorder()))),
+                            const SizedBox(width: 12),
+                            Expanded(child: DropdownButtonFormField<String>(
+                              value: transactionCurrency,
+                              decoration: const InputDecoration(labelText: 'Currency', border: OutlineInputBorder()),
+                              items: ['EUR', 'USD', 'GBP', 'CHF'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                              onChanged: isReadOnly ? null : (v) => setS(() { transactionCurrency = v!; }),
                             )),
-                            const SizedBox(width: 8),
-                            Expanded(child: TextField(
-                              readOnly: isReadOnly,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(labelText: "Crédit"),
-                              onChanged: (v) => setS(() => lines[idx].credit = double.tryParse(v.replaceAll(',', '.')) ?? 0),
-                            )),
-                            if (!isReadOnly) IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: () => setS(() => lines.removeAt(idx))),
                           ],
                         ),
-                        const Divider(height: 32),
-                      ],
-                    );
-                  }),
-                  if (!isReadOnly) TextButton.icon(onPressed: () => setS(() => lines.add(JournalLine(accountCode: '', description: '', debit: 0, credit: 0))), icon: const Icon(Icons.add), label: const Text("Ajouter une ligne")),
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: isBalanced ? Colors.green[50] : Colors.red[50], borderRadius: BorderRadius.circular(8)),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text("Total Débit: ${totalDebit.toStringAsFixed(2)} €", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[800])),
-                          Text("Total Crédit: ${totalCredit.toStringAsFixed(2)} €", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[800])),
-                        ]),
-                        if (!isBalanced) const Icon(Icons.warning_amber_rounded, color: Colors.red),
-                        if (isBalanced) const Icon(Icons.check_circle_outline, color: Colors.green),
+                        if (showExchangeRate) ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: rateController,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(labelText: 'Exchange Rate (1 $transactionCurrency = ? ${currentEntity.currency})', border: const OutlineInputBorder()),
+                            onChanged: (v) => exchangeRate = double.tryParse(v) ?? 1.0,
+                          ),
+                        ],
+
+                        const SizedBox(height: 30),
+                        const Text("LINES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
+                        const Divider(),
+
+                        // LINES (NetSuite Style)
+                        ...lines.asMap().entries.map((item) {
+                          int idx = item.key;
+                          JournalLine line = item.value;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(flex: 3, child: DropdownButtonFormField<String>(
+                                      value: accounts.any((a) => a.number == line.accountCode) ? line.accountCode : null,
+                                      isExpanded: true,
+                                      items: accounts.map((a) => DropdownMenuItem(value: a.number, child: Text("${a.number} ${a.name}", style: const TextStyle(fontSize: 10), overflow: TextOverflow.ellipsis))).toList(),
+                                      onChanged: isReadOnly ? null : (v) => setS(() => lines[idx].accountCode = v!),
+                                      decoration: const InputDecoration(labelText: "Account", isDense: true),
+                                    )),
+                                    const SizedBox(width: 8),
+                                    if (!isReadOnly) IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20), onPressed: () => setS(() => lines.removeAt(idx))),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  readOnly: isReadOnly,
+                                  onChanged: (v) => line.description = v,
+                                  decoration: const InputDecoration(labelText: "Memo (Line Description)", isDense: true),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(child: TextField(
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(labelText: "Debit", isDense: true, prefixText: ""),
+                                      onChanged: (v) {
+                                        setS(() {
+                                          lines[idx].debit = double.tryParse(v.replaceAll(',', '.')) ?? 0;
+                                          if (lines[idx].debit > 0) lines[idx].credit = 0;
+                                        });
+                                      },
+                                    )),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: TextField(
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(labelText: "Credit", isDense: true),
+                                      onChanged: (v) {
+                                        setS(() {
+                                          lines[idx].credit = double.tryParse(v.replaceAll(',', '.')) ?? 0;
+                                          if (lines[idx].credit > 0) lines[idx].debit = 0;
+                                        });
+                                      },
+                                    )),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                _buildTaxDropdown(
+                                    value: line.tvaRate ?? 0.0,
+                                    isReadOnly: isReadOnly,
+                                    onChanged: (v) => setS(() => lines[idx].tvaRate = v),
+                                    label: "Line Tax Code"
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+
+                        TextButton.icon(
+                          onPressed: () => setS(() => lines.add(JournalLine(accountCode: '', description: '', debit: 0, credit: 0))),
+                          icon: const Icon(Icons.add_circle_outline),
+                          label: const Text("Add New Line"),
+                        ),
+                        const SizedBox(height: 100), // Space for bottom bar
                       ],
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  if (!isReadOnly)
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: isBalanced ? primaryColor : Colors.grey, minimumSize: const Size(double.infinity, 50)),
-                      onPressed: () {
-                        if (!isBalanced) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text("L'écriture doit être équilibrée (Débit = Crédit)")));
-                          return;
-                        }
-                        if (entityId == null || journalNumC.text.isEmpty) return;
-                        onSave(JournalEntry(
-                          id: entry?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                          date: entryDate,
-                          journalNumber: journalNumC.text,
-                          entityId: entityId!,
-                          lines: lines,
-                        ));
-                        Navigator.pop(ctx);
-                      },
-                      child: const Text('ENREGISTRER OD', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                    ),
-                ],
-              ),
+                ),
+
+                // BOTTOM SUMMARY BAR
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey[200]!))),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            const Text("TOTALS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                            Row(children: [
+                              Text("D: ${totalDebit.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                              const SizedBox(width: 15),
+                              Text("C: ${totalCredit.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                            ]),
+                          ]),
+                          if (isBalanced) const Icon(Icons.check_circle, color: Colors.green) else const Icon(Icons.warning, color: Colors.red),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isBalanced ? Colors.black : Colors.grey,
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: isBalanced ? () {
+                          if (entityId == null || journalNumC.text.isEmpty) return;
+                          onSave(JournalEntry(
+                            id: entry?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                            date: entryDate,
+                            journalNumber: journalNumC.text,
+                            entityId: entityId!,
+                            lines: lines,
+                          ));
+                          Navigator.pop(ctx);
+                        } : null,
+                        child: const Text('SAVE ENTRY', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                )
+              ],
             ),
           );
         },
@@ -831,9 +706,7 @@ class InvoiceDialogs {
     DateTime date = DateTime.now();
     String selectedAccount = "601";
     double tvaR = 20.0;
-
     final chargeAccounts = accounts.where((a) => a.type == 'charge').toList();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -857,12 +730,7 @@ class InvoiceDialogs {
                 DropdownButtonFormField<String>(
                   value: suppliers.any((s) => s.id == supplierId) ? supplierId : null,
                   items: suppliers.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
-                  onChanged: (v) {
-                    setS(() {
-                      supplierId = v;
-                      supplierName = suppliers.firstWhere((s) => s.id == v).name;
-                    });
-                  },
+                  onChanged: (v) { setS(() { supplierId = v; supplierName = suppliers.firstWhere((s) => s.id == v).name; }); },
                   decoration: const InputDecoration(labelText: 'Fournisseur concerné'),
                 ),
                 const SizedBox(height: 16),
@@ -875,34 +743,21 @@ class InvoiceDialogs {
                   decoration: const InputDecoration(labelText: "Compte de charge"),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: TextField(controller: htC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Montant HT Estimé *'))),
-                    const SizedBox(width: 8),
-                    Expanded(child: DropdownButtonFormField<double>(value: [20.0, 10.0, 5.5, 0.0].contains(tvaR) ? tvaR : 20.0, items: [20.0, 10.0, 5.5, 0.0].map((t) => DropdownMenuItem(value: t, child: Text('TVA $t%'))).toList(), onChanged: (v) => setS(() => tvaR = v!), decoration: const InputDecoration(labelText: 'Taux'))),
-                  ],
-                ),
+                Row(children: [
+                  Expanded(flex: 3, child: Container(margin: const EdgeInsets.only(right: 8), child: TextField(controller: htC, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Montant HT Estimé *')))),
+                  Expanded(flex: 2, child: _buildTaxDropdown(
+                      value: tvaR,
+                      isReadOnly: false,
+                      onChanged: (v) => setS(() => tvaR = v!)
+                  )),
+                ]),
                 const SizedBox(height: 32),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: primaryColor, minimumSize: const Size(double.infinity, 50)),
                   onPressed: () {
                     if (entityId == null || htC.text.isEmpty || desC.text.isEmpty) return;
                     double ht = double.tryParse(htC.text) ?? 0;
-                    onSave(Invoice(
-                      id: 'fnp-${DateTime.now().millisecondsSinceEpoch}',
-                      number: 'FNP-PROV',
-                      supplierOrClientName: supplierName ?? "Provision Diverses",
-                      supplierOrClientId: supplierId ?? 'unknown',
-                      amountHT: ht,
-                      tva: ht * tvaR / 100,
-                      amountTTC: ht * (1 + tvaR / 100),
-                      date: date,
-                      type: InvoiceType.achat,
-                      entityId: entityId!,
-                      designation: desC.text,
-                      expenseAccount: selectedAccount,
-                      status: InvoiceStatus.pending,
-                    ));
+                    onSave(Invoice(id: 'fnp-${DateTime.now().millisecondsSinceEpoch}', number: 'FNP-PROV', supplierOrClientName: supplierName ?? "Provision Diverses", supplierOrClientId: supplierId ?? 'unknown', amountHT: ht, tva: ht * tvaR / 100, amountTTC: ht * (1 + tvaR / 100), date: date, type: InvoiceType.achat, entityId: entityId!, designation: desC.text, expenseAccount: selectedAccount, status: InvoiceStatus.pending));
                     Navigator.pop(ctx);
                   },
                   child: const Text('ENREGISTRER PROVISION', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -911,6 +766,72 @@ class InvoiceDialogs {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  static Widget _buildTaxDropdown({
+    required double? value,
+    required bool isReadOnly,
+    required void Function(double?) onChanged,
+    String label = 'Tax Code',
+  }) {
+    final List<DropdownMenuItem<String>> items = [];
+    String? selectedValue;
+
+    void addGroup(String title, List<double> rates) {
+      items.add(DropdownMenuItem<String>(
+        enabled: false,
+        value: "header:$title",
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (items.isNotEmpty) const Divider(height: 10),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.blueGrey)),
+          ],
+        ),
+      ));
+      for (var r in rates) {
+        String val = "$title:$r";
+        items.add(DropdownMenuItem<String>(value: val, child: Text("TVA $r %", style: const TextStyle(fontSize: 12))));
+        if (selectedValue == null && value != null && (r - value).abs() < 0.001) {
+          selectedValue = val;
+        }
+      }
+    }
+
+    addGroup("FRANCE (TVA FR)", _apiService.getTaxesForCountry("France"));
+    addGroup("UK (VAT UK)", _apiService.getTaxesForCountry("UK"));
+    addGroup("GERMANY (MwSt DE)", _apiService.getTaxesForCountry("Germany"));
+    addGroup("USA (Sales Tax US)", _apiService.getTaxesForCountry("USA"));
+
+    if (selectedValue == null && items.isNotEmpty) {
+      for (var item in items) {
+        if (item.value != null && !item.value!.startsWith("header:")) {
+          selectedValue = item.value;
+          break;
+        }
+      }
+    }
+
+    return DropdownButtonFormField<String>(
+      value: selectedValue,
+      items: items,
+      onChanged: isReadOnly ? null : (v) {
+        if (v != null && !v.startsWith("header:")) {
+          final parts = v.split(':');
+          if (parts.length > 1) {
+            onChanged(double.tryParse(parts[1]));
+          }
+        }
+      },
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       ),
     );
   }

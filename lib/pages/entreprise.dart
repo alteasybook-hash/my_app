@@ -15,19 +15,26 @@ class EntreprisePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          icon: Icon(Icons.arrow_back_ios, color: isDark ? primaryColor : Colors.black),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.pop(context);
+            } else {
+              // Si on ne peut pas pop, on est probablement dans un onglet, donc on ne fait rien ou on redirige
+            }
+          },
         ),
         title: Text(
           t.entreprise,
-          style: const TextStyle(
-              color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
       body: SingleChildScrollView(
@@ -107,7 +114,6 @@ class EntreprisePage extends StatelessWidget {
               },
             ),
 
-            // --- Bloc d'historique ajouté ici ---
             _buildHistoryMiniBlock(context),
 
             const SizedBox(height: 40),
@@ -116,8 +122,6 @@ class EntreprisePage extends StatelessWidget {
       ),
     );
   }
-
-  // --- FONCTIONS DE CONSTRUCTION (WIDGETS) ---
 
   Widget _buildSectionTitle(String title) {
     return Padding(
@@ -136,12 +140,13 @@ class EntreprisePage extends StatelessWidget {
 
   Widget _buildMenuCard(BuildContext context, String title, String subtitle,
       IconData icon, VoidCallback onTap) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF232435) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -159,16 +164,16 @@ class EntreprisePage extends StatelessWidget {
             color: primaryColor.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: Colors.black),
+          child: Icon(icon, color: isDark ? primaryColor : Colors.black),
         ),
         title: Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black),
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(subtitle,
-              style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+              style: TextStyle(color: isDark ? Colors.white70 : Colors.grey[600], fontSize: 13)),
         ),
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       ),
@@ -189,7 +194,7 @@ class EntreprisePage extends StatelessWidget {
         margin: const EdgeInsets.only(top: 8),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         decoration: BoxDecoration(
-          color: Color(0xFF232435), // Case noire
+          color: const Color(0xFF232435),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -200,8 +205,7 @@ class EntreprisePage extends StatelessWidget {
                 color: primaryColor.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.history_toggle_off_rounded, color: primaryColor,
-                  size: 24),
+              child: Icon(Icons.history_toggle_off_rounded, color: primaryColor, size: 24),
             ),
             const SizedBox(width: 16),
             const Expanded(

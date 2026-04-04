@@ -108,6 +108,7 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
 
   void _showAddRdvSheet({RdvEvent? eventToEdit}) {
     final t = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final titleController = TextEditingController(text: eventToEdit?.title ?? '');
     final descController = TextEditingController(text: eventToEdit?.description ?? '');
     DateTime selectedDate = eventToEdit?.date ?? DateTime.now();
@@ -121,7 +122,10 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Container(
-          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E2C) : Colors.white, 
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30))
+          ),
           padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 20, top: 20, left: 20, right: 20),
           child: SingleChildScrollView(
             child: Column(
@@ -129,13 +133,19 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
               children: [
                 Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 20),
-                Text(eventToEdit == null ? t.newRdv : 'Modifier RDV', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                Text(eventToEdit == null ? t.newRdv : 'Modifier RDV', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
                 const SizedBox(height: 20),
-                TextField(controller: titleController, decoration: InputDecoration(labelText: t.titleHint, border: const OutlineInputBorder())),
+                TextField(
+                  controller: titleController, 
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                  decoration: InputDecoration(labelText: t.titleHint, labelStyle: const TextStyle(color: Colors.grey), border: const OutlineInputBorder())
+                ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  initialValue: selectedType,
-                  decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Type'),
+                  value: selectedType,
+                  dropdownColor: isDark ? const Color(0xFF232435) : Colors.white,
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                  decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Type', labelStyle: TextStyle(color: Colors.grey)),
                   items: ['perso', 'pro', 'voyage'].map((type) => DropdownMenuItem(value: type, child: Text(type.toUpperCase()))).toList(),
                   onChanged: (v) => setModalState(() => selectedType = v!),
                 ),
@@ -143,6 +153,7 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
                 Row(
                   children: [
                     Expanded(child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(foregroundColor: isDark ? primaryColor : Colors.black),
                         onPressed: () async {
                           final d = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365)));
                           if (d != null) setModalState(() => selectedDate = d);
@@ -151,6 +162,7 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
                         label: Text('${selectedDate.day}/${selectedDate.month}/${selectedDate.year}'))),
                     const SizedBox(width: 10),
                     Expanded(child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(foregroundColor: isDark ? primaryColor : Colors.black),
                         onPressed: () async {
                           final tm = await showTimePicker(context: context, initialTime: selectedTime);
                           if (tm != null) setModalState(() => selectedTime = tm);
@@ -159,7 +171,12 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
                         label: Text(selectedTime.format(context)))),
                   ],
                 ),
-                SwitchListTile(title: Text(t.urgentLabel), value: isUrgent, activeThumbColor: Colors.red, onChanged: (v) => setModalState(() => isUrgent = v)),
+                SwitchListTile(
+                  title: Text(t.urgentLabel, style: TextStyle(color: isDark ? Colors.white : Colors.black)), 
+                  value: isUrgent, 
+                  activeThumbColor: Colors.red, 
+                  onChanged: (v) => setModalState(() => isUrgent = v)
+                ),
                 const SizedBox(height: 20),
                 SizedBox(width: double.infinity, height: 55, child: ElevatedButton(
                   onPressed: () async {
@@ -204,19 +221,27 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
-        title: Text(t.rdv, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        bottom: TabBar(controller: _tabController, labelColor: Colors.black, indicatorColor: primaryColor, tabs: [Tab(text: t.upcoming), Tab(text: t.history)]),
+        leading: IconButton(icon: Icon(Icons.arrow_back_ios, color: isDark ? primaryColor : Colors.black), onPressed: () => Navigator.pop(context)),
+        title: Text(t.rdv, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+        bottom: TabBar(
+          controller: _tabController, 
+          labelColor: isDark ? primaryColor : Colors.black, 
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: primaryColor, 
+          tabs: [Tab(text: t.upcoming), Tab(text: t.history)]
+        ),
       ),
       body: FutureBuilder<List<RdvEvent>>(
         future: _eventsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return Center(child: Text('Erreur : vérifiez que NestJS tourne', style: TextStyle(color: Colors.red[300])));
+          if (snapshot.hasError) return Center(child: Text('Erreur de chargement', style: TextStyle(color: Colors.red[300])));
 
           final events = snapshot.data ?? [];
           return TabBarView(
@@ -235,7 +260,8 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildEventList(List<RdvEvent> events) {
-    if (events.isEmpty) return const Center(child: Text('Aucun rendez-vous'));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (events.isEmpty) return Center(child: Text('Aucun rendez-vous', style: TextStyle(color: isDark ? Colors.grey : Colors.black54)));
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: events.length,
@@ -244,7 +270,8 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
         return Card(
           elevation: 0,
           margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.withValues(alpha: 0.2))),
+          color: isDark ? const Color(0xFF232435) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.2))),
           child: ListTile(
             leading: Container(
                 width: 4,
@@ -254,10 +281,10 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
                     borderRadius: BorderRadius.circular(2)
                 )
             ),
-            title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('${event.date.day}/${event.date.month} à ${event.date.hour}:${event.date.minute}'),
+            title: Text(event.title, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+            subtitle: Text('${event.date.day}/${event.date.month} à ${event.date.hour}:${event.date.minute}', style: const TextStyle(color: Colors.grey)),
             trailing: PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
+              icon: Icon(Icons.more_vert, color: isDark ? Colors.white70 : Colors.black),
               onSelected: (val) {
                 if (val == 'edit') _showAddRdvSheet(eventToEdit: event);
                 if (val == 'delete') _handleDelete(event.id);

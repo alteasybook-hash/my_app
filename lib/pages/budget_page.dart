@@ -21,22 +21,24 @@ class _BudgetPageState extends State<BudgetPage> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          icon: Icon(Icons.arrow_back_ios, color: isDark ? primaryColor : Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           t.budget,
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
         ),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.black,
+          labelColor: isDark ? primaryColor : Colors.black,
           unselectedLabelColor: Colors.grey,
           indicatorColor: primaryColor,
           indicatorWeight: 3,
@@ -76,7 +78,7 @@ class _BudgetPageState extends State<BudgetPage> with SingleTickerProviderStateM
       padding: const EdgeInsets.all(24),
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Color(0xFF232435),
+        color: const Color(0xFF232435),
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
@@ -101,6 +103,7 @@ class _BudgetPageState extends State<BudgetPage> with SingleTickerProviderStateM
 
   Widget _buildListView(String type) {
     final t = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: 3,
@@ -108,9 +111,10 @@ class _BudgetPageState extends State<BudgetPage> with SingleTickerProviderStateM
         return Card(
           elevation: 0,
           margin: const EdgeInsets.only(bottom: 12),
+          color: isDark ? const Color(0xFF232435) : Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+            side: BorderSide(color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.2)),
           ),
           child: ListTile(
             leading: CircleAvatar(
@@ -119,14 +123,14 @@ class _BudgetPageState extends State<BudgetPage> with SingleTickerProviderStateM
                 type == t.income
                     ? Icons.add_circle_outline
                     : Icons.remove_circle_outline,
-                color: Colors.black,
+                color: isDark ? primaryColor : Colors.black,
               ),
             ),
-            title: Text('Item $index', style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: const Text('12/05/2024'),
+            title: Text('Item $index', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+            subtitle: const Text('12/05/2024', style: TextStyle(color: Colors.grey)),
             trailing: Text(
               '${(index + 1) * 50} €',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
             ),
           ),
         );
@@ -136,38 +140,43 @@ class _BudgetPageState extends State<BudgetPage> with SingleTickerProviderStateM
 
   void _showAddEntrySheet() {
     final t = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         ),
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Center(child: Icon(Icons.account_balance_wallet_outlined, size: 40)),
+            Center(child: Icon(Icons.account_balance_wallet_outlined, size: 40, color: isDark ? primaryColor : Colors.black)),
             const SizedBox(height: 16),
             Text(
               t.budget,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
             ),
             const Divider(height: 32),
             TextField(
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
               decoration: InputDecoration(
                 labelText: t.titleHint,
+                labelStyle: const TextStyle(color: Colors.grey),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 16),
             TextField(
               keyboardType: TextInputType.number,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
               decoration: InputDecoration(
                 labelText: t.amountLabel,
+                labelStyle: const TextStyle(color: Colors.grey),
                 suffixText: '€',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),

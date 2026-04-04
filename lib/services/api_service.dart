@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../models/task.dart';
 import '../models/invoice.dart';
@@ -21,8 +21,18 @@ import '../ai/accounting_ai.dart';
 class ApiService {
   static const String baseUrl = 'http://10.0.2.2:3001';
 
-  // --- IA PROVIDER ---
-  final AccountingAI aiProvider = AccountingAI(apiKey: 'AIzaSyCrtVAiqGDLtdC9RQSxZnm4-FQ2mhJTTy4');
+  late final AccountingAI aiProvider;
+
+  ApiService() {
+    final String key = dotenv.get('GEMINI_API_KEY', fallback: '');
+
+    if (key.isEmpty) {
+      debugPrint(
+          'ERREUR : La clé API Gemini est vide. Vérifiez votre fichier .env');
+    }
+
+    aiProvider = AccountingAI(apiKey: key);
+  }
 
   // --- CACHES STATIQUES ---
   static final List<Entity> _entitiesCache = [];
@@ -45,29 +55,46 @@ class ApiService {
   static final List<Map<String, dynamic>> _companyDocsCache = [];
   static final List<dynamic> _eventsCache = [];
 
+  static final Map<String, List<double>> _customTaxes = {
+    'France': [0.0, 2.1, 5.5, 10.0, 20.0],
+    'UK': [0.0, 5.0, 20.0],
+    'Germany': [0.0, 7.0, 19.0],
+    'Spain': [0.0, 4.0, 10.0, 21.0],
+    'Italy': [0.0, 4.0, 5.0, 10.0, 22.0],
+    'Portugal': [0.0, 6.0, 13.0, 23.0],
+    'Belgium': [0.0, 6.0, 12.0, 21.0],
+    'Luxembourg': [0.0, 3.0, 8.0, 14.0, 17.0],
+    'Switzerland': [0.0, 2.6, 3.8, 8.1],
+    'USA': [0.0, 4.0, 6.25, 8.875],
+  };
+
   static bool _isLoadedFromStorage = false;
   static String? _adminPin;
 
-
-  // Dans lib/services/api_service.dart
   List<double> getTaxesForCountry(String country) {
-    final Map<String, List<double>> defaultTaxes = {
-      'France': [0.0, 2.1, 5.5, 10.0, 20.0],
-      'Allemagne': [0.0, 7.0, 19.0],
-      'UK': [0.0, 5.0, 20.0],
-      'USA': [0.0, 4.0, 6.25, 8.875],
-    };
-    return defaultTaxes[country] ?? [0.0, 20.0];
+    String key = country;
+    if (country == 'Allemagne') key = 'Germany';
+    return _customTaxes[key] ?? [0.0, 20.0];
   }
 
-  // --- INITIALISATION ---
+  Future<void> addTaxRate(String country, double rate) async {
+    await _ensureLoaded();
+    String key = country;
+    if (country == 'Allemagne') key = 'Germany';
+    if (!_customTaxes.containsKey(key)) _customTaxes[key] = [];
+    if (!_customTaxes[key]!.contains(rate)) {
+      _customTaxes[key]!.add(rate);
+      _customTaxes[key]!.sort();
+      await _saveToStorage();
+    }
+  }
+
   Future<void> _ensureLoaded() async {
     if (!_isLoadedFromStorage) {
       await _loadFromStorage();
     }
   }
 
-  // --- COMPTES COMPTABLES ---
   Future<List<Account>> fetchAccounts() async {
     await _ensureLoaded();
     return [...Account.defaultAccounts, ..._customAccountsCache];
@@ -75,13 +102,27 @@ class ApiService {
 
   Future<void> createAccount(Account account) async {
     await _ensureLoaded();
-    if (_customAccountsCache.any((a) => a.number == account.number) ||
-        Account.defaultAccounts.any((a) => a.number == account.number)) return;
-    _customAccountsCache.add(account);
+    int idx = _customAccountsCache.indexWhere((a) => a.id == account.id);
+    if (idx != -1) {
+      _customAccountsCache[idx] = account; // Mise à jour si l'ID existe déjà
+    } else {
+      // Si c'est un nouveau numéro de compte, on vérifie s'il existe déjà par numéro
+      int numIdx = _customAccountsCache.indexWhere((a) => a.number == account.number);
+      if (numIdx != -1) {
+        _customAccountsCache[numIdx] = account;
+      } else {
+        _customAccountsCache.add(account);
+      }
+    }
     await _saveToStorage();
   }
 
-  // --- COMPTES BANCAIRES ---
+  Future<void> deleteAccount(String id) async {
+    await _ensureLoaded();
+    _customAccountsCache.removeWhere((a) => a.id == id);
+    await _saveToStorage();
+  }
+
   Future<List<BankAccount>> fetchBankAccounts() async {
     await _ensureLoaded();
     return List.from(_bankAccountsCache);
@@ -93,7 +134,6 @@ class ApiService {
     await _saveToStorage();
   }
 
-  // --- FACTURES ---
   Future<List<Invoice>> fetchInvoices(InvoiceType type) async {
     await _ensureLoaded();
     return _invoicesCache.where((i) => i.type == type).toList();
@@ -102,7 +142,7 @@ class ApiService {
   Future<void> createInvoice(Invoice inv) async {
     await _ensureLoaded();
     _invoicesCache.add(inv);
-    
+
     for (var p in inv.payments) {
       _bankTransactionsCache.add(BankTransaction(
         id: 'pay-${p.id}',
@@ -119,7 +159,7 @@ class ApiService {
         matchedDocumentNumber: inv.number,
       ));
     }
-    
+
     await _saveToStorage();
   }
 
@@ -143,7 +183,6 @@ class ApiService {
     }
   }
 
-
   Future<void> deleteInvoice(String id) async {
     await _ensureLoaded();
     int idx = _invoicesCache.indexWhere((i) => i.id == id);
@@ -163,8 +202,6 @@ class ApiService {
     }
   }
 
-
-  // --- RAPPROCHEMENT BANCAIRE ---
   Future<List<BankTransaction>> fetchBankTransactions() async {
     await _ensureLoaded();
     return List.from(_bankTransactionsCache);
@@ -173,6 +210,12 @@ class ApiService {
   Future<void> createBankTransaction(BankTransaction tx) async {
     await _ensureLoaded();
     _bankTransactionsCache.add(tx);
+    await _saveToStorage();
+  }
+
+  Future<void> deleteBankTransactions(List<String> ids) async {
+    await _ensureLoaded();
+    _bankTransactionsCache.removeWhere((t) => ids.contains(t.id));
     await _saveToStorage();
   }
 
@@ -186,7 +229,7 @@ class ApiService {
       amount: payment.type == PaymentType.fournisseur
           ? -payment.amountBaseCurrency
           : payment.amountBaseCurrency,
-      currency: 'EUR', // Devise du compte par défaut
+      currency: 'EUR',
       originalAmount: payment.amount,
       originalCurrency: payment.currency,
       exchangeRate: payment.exchangeRate,
@@ -214,8 +257,6 @@ class ApiService {
 
     await _saveToStorage();
   }
-
-
 
   Future<void> updateBankTransaction(String id, Map<String, dynamic> data) async {
     await _ensureLoaded();
@@ -249,7 +290,6 @@ class ApiService {
     repairHistoryAmounts();
     return List.from(_reconciliationsCache);
   }
-
 
   Future<void> createReconciliation(ReconciliationRecord record) async {
     await _ensureLoaded();
@@ -286,8 +326,6 @@ class ApiService {
     await _saveToStorage();
   }
 
-
-
   void repairHistoryAmounts() {
     bool changed = false;
     for (var i = 0; i < _reconciliationsCache.length; i++) {
@@ -296,13 +334,13 @@ class ApiService {
         double realSum = _bankTransactionsCache
             .where((t) => record.bankTxIds.contains(t.id))
             .fold(0.0, (sum, t) => sum + t.amount);
-        
+
         if (realSum == 0) {
-           realSum = _bankTransactionsCache
-            .where((t) => record.invoiceIds.contains(t.id))
-            .fold(0.0, (sum, t) => sum + t.amount);
+          realSum = _bankTransactionsCache
+              .where((t) => record.invoiceIds.contains(t.id))
+              .fold(0.0, (sum, t) => sum + t.amount);
         }
-        
+
         if (realSum != 0) {
           _reconciliationsCache[i] = record.copyWith(totalAmount: realSum);
           changed = true;
@@ -314,14 +352,12 @@ class ApiService {
     }
   }
 
-
   Future<void> deleteReconciliation(String id) async {
     await _ensureLoaded();
     _reconciliationsCache.removeWhere((r) => r.id == id);
     await _saveToStorage();
   }
 
-  // --- COMPTABILITÉ (JOURNAL) ---
   Future<List<JournalEntry>> fetchJournalEntries() async {
     await _ensureLoaded();
     return List.from(_journalCache);
@@ -391,15 +427,14 @@ class ApiService {
     }
   }
 
-  // --- PARTENAIRES ---
   Future<List<Supplier>> fetchSuppliers() async { await _ensureLoaded(); return List.from(_suppliersCache); }
   Future<void> createSupplier(Supplier s) async {await _ensureLoaded();
-    int idx = _suppliersCache.indexWhere((existing) => existing.id == s.id);if (idx != -1) {
-      _suppliersCache[idx] = s; // Mise à jour si l'ID existe
-    } else {
-      _suppliersCache.add(s); // Ajout sinon
-    }
-    await _saveToStorage();
+  int idx = _suppliersCache.indexWhere((existing) => existing.id == s.id);if (idx != -1) {
+    _suppliersCache[idx] = s;
+  } else {
+    _suppliersCache.add(s);
+  }
+  await _saveToStorage();
   }
   Future<List<Supplier>> fetchCustomers() async {
     await _ensureLoaded(); return List.from(_customersCache); }
@@ -408,14 +443,13 @@ class ApiService {
     await _ensureLoaded();
     int idx = _customersCache.indexWhere((existing) => existing.id == s.id);
     if (idx != -1) {
-      _customersCache[idx] = s; // Mise à jour
+      _customersCache[idx] = s;
     } else {
-      _customersCache.add(s); // Ajout
+      _customersCache.add(s);
     }
     await _saveToStorage();
   }
 
-  // --- DEVIS ---
   Future<List<Map<String, dynamic>>> fetchQuotes() async { await _ensureLoaded(); return List.from(_quotesCache); }
   Future<void> createQuote(Map<String, dynamic> quote) async { await _ensureLoaded(); _quotesCache.add(quote); await _saveToStorage(); }
   Future<void> updateQuote(String id, Map<String, dynamic> data) async { await _ensureLoaded(); int idx = _quotesCache.indexWhere((q) => q['id'] == id); if (idx != -1) { _quotesCache[idx] = {..._quotesCache[idx], ...data}; await _saveToStorage(); } }
@@ -438,24 +472,19 @@ class ApiService {
     }
   }
 
-  // --- ENTITÉS ---
   Future<List<Entity>> fetchEntities() async {
     await _ensureLoaded(); return List.from(_entitiesCache);
   }
 
-
   Future<void> createEntity(Entity e) async {
     await _ensureLoaded(); _entitiesCache.add(e);
     await _saveToStorage(); }
-
 
   Future<void> updateEntity(String id, Map<String, dynamic> data) async {
     await _ensureLoaded();
     int idx = _entitiesCache.indexWhere((e) => e.id == id);
     if (idx != -1) { _entitiesCache[idx] = Entity.fromJson({..._entitiesCache[idx].toJson(), ...data}); await _saveToStorage(); }
   }
-
-// --- ÉVÉNEMENTS & TÂCHES ---
 
   Future<List<dynamic>> fetchEvents() async { await _ensureLoaded(); return _eventsCache; }
   Future<void> createEvent(Map<String, dynamic> data) async {
@@ -471,7 +500,6 @@ class ApiService {
   }
   Future<void> deleteEvent(String id) async { await _ensureLoaded(); _eventsCache.removeWhere((e) => e['id'].toString() == id); await _saveToStorage(); }
 
-
   Future<void> updateTask(String id, Map<String, dynamic> data) async {
     await _ensureLoaded();
     int idx = _tasksCache.indexWhere((t) => t.id == id);
@@ -479,10 +507,6 @@ class ApiService {
   }
   Future<void> deleteTask(String id) async { await _ensureLoaded(); _tasksCache.removeWhere((t) => t.id == id); await _saveToStorage(); }
 
-
-
-
-  // --- TÂCHES ---
   Future<List<Task>> fetchTasks() async {
     await _ensureLoaded();
     return List.from(_tasksCache);
@@ -494,9 +518,6 @@ class ApiService {
     await _saveToStorage();
   }
 
-
-
-  // --- EMPLOYÉS ---
   Future<List<Employee>> fetchEmployees() async {
     await _ensureLoaded();
     return List.from(_employeesCache);
@@ -517,7 +538,6 @@ class ApiService {
     }
   }
 
-  // --- ABSENCES ---
   Future<List<Absence>> fetchAbsences() async {
     await _ensureLoaded();
     return List.from(_absencesCache);
@@ -535,7 +555,6 @@ class ApiService {
     await _saveToStorage();
   }
 
-  // --- DOCUMENTS RH ---
   Future<List<HRDocument>> fetchHrDocuments() async {
     await _ensureLoaded();
     return List.from(_hrDocsCache);
@@ -553,7 +572,6 @@ class ApiService {
     await _saveToStorage();
   }
 
-  // --- TITRES RESTO (TR) ---
   Future<Map<String, dynamic>> getTRData() async {
     await _ensureLoaded();
     return Map.from(_trDataCache);
@@ -565,7 +583,6 @@ class ApiService {
     await _saveToStorage();
   }
 
-  // --- DOCUMENTS ENTREPRISE (ADMIN) ---
   Future<List<Map<String, dynamic>>> fetchCompanyDocuments() async {
     await _ensureLoaded();
     return List.from(_companyDocsCache);
@@ -583,7 +600,6 @@ class ApiService {
     await _saveToStorage();
   }
 
-  // --- NOTIFICATIONS & ADMIN ---
   Future<void> addNotification(String n) async { await _ensureLoaded(); _notifications.insert(0, n); await _saveToStorage(); }
 
   Future<String?> getAdminPin() async {
@@ -607,16 +623,65 @@ class ApiService {
     await _saveToStorage();
   }
 
+  Future<void> deleteHistoryEntry(String id) async {
+    await _ensureLoaded();
+    _historyCache.removeWhere((e) => e.id == id);
+    await _saveToStorage();
+  }
 
-  // --- PERSISTANCE ---
-
-
-  // --- PERSISTANCE ---
+  Future<void> restoreHistoryEntry(String id) async {
+    await _ensureLoaded();
+    int idx = _historyCache.indexWhere((e) => e.id == id);
+    if (idx != -1) {
+      final entry = _historyCache[idx];
+      if (entry.data != null) {
+        switch (entry.type) {
+          case HistoryType.invoiceAchat:
+          case HistoryType.invoiceVente:
+            _invoicesCache.add(Invoice.fromJson(entry.data!));
+            break;
+          case HistoryType.quote:
+            _quotesCache.add(entry.data!);
+            break;
+          case HistoryType.journal:
+            _journalCache.add(JournalEntry.fromJson(entry.data!));
+            break;
+          case HistoryType.supplier:
+            _suppliersCache.add(Supplier.fromJson(entry.data!));
+            break;
+          case HistoryType.customer:
+            _customersCache.add(Supplier.fromJson(entry.data!));
+            break;
+          case HistoryType.employee:
+            _employeesCache.add(Employee.fromJson(entry.data!));
+            break;
+          case HistoryType.absence:
+            _absencesCache.add(Absence.fromJson(entry.data!));
+            break;
+          case HistoryType.hrDocument:
+            _hrDocsCache.add(HRDocument.fromJson(entry.data!));
+            break;
+          case HistoryType.entity:
+            _entitiesCache.add(Entity.fromJson(entry.data!));
+            break;
+          case HistoryType.companyDoc:
+            _companyDocsCache.add(entry.data!);
+            break;
+          case HistoryType.event:
+            _eventsCache.add(entry.data!);
+            break;
+          default:
+            break;
+        }
+      }
+      _historyCache.removeAt(idx);
+      await _saveToStorage();
+    }
+  }
 
   Future<void> _saveToStorage() async {
     try {
-      final prefs = await SharedPreferences
-          .getInstance(); // Sauvegarde des listes (Compta/Banque)
+      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('invoices_db',
           jsonEncode(_invoicesCache.map((i) => i.toJson()).toList()));
       await prefs.setString('bank_accounts_db',
@@ -639,7 +704,6 @@ class ApiService {
       await prefs.setString('history_db',
           jsonEncode(_historyCache.map((h) => h.toJson()).toList()));
 
-      // --- AJOUTS : SAUVEGARDE RH & RDV ---
       await prefs.setString(
           'tasks_db', jsonEncode(_tasksCache.map((t) => t.toJson()).toList()));
       await prefs.setString('employees_db',
@@ -647,11 +711,12 @@ class ApiService {
       await prefs.setString('absences_db',
           jsonEncode(_absencesCache.map((a) => a.toJson()).toList()));
       await prefs.setString(
-          'events_db', jsonEncode(_eventsCache)); // Sauvegarde des RDV
+          'events_db', jsonEncode(_eventsCache));
       await prefs.setString('hr_docs_db',
           jsonEncode(_hrDocsCache.map((d) => d.toJson()).toList()));
       await prefs.setString('company_docs_db', jsonEncode(_companyDocsCache));
       await prefs.setString('tr_data_db', jsonEncode(_trDataCache));
+      await prefs.setString('custom_taxes_db', jsonEncode(_customTaxes));
 
       if (_adminPin != null) await prefs.setString('admin_pin_db', _adminPin!);
 
@@ -661,12 +726,10 @@ class ApiService {
     }
   }
 
-
   Future<void> _loadFromStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Chargement via la méthode générique
       _loadCache(prefs, 'invoices_db', _invoicesCache, (data) =>
           Invoice.fromJson(data));
       _loadCache(prefs, 'bank_accounts_db', _bankAccountsCache, (data) =>
@@ -689,7 +752,6 @@ class ApiService {
       _loadCache(prefs, 'history_db', _historyCache, (data) =>
           HistoryEntry.fromJson(data));
 
-      // --- AJOUTS : CHARGEMENT RH & TÂCHES (Ce qui vous manquait) ---
       _loadCache(prefs, 'tasks_db', _tasksCache, (data) => Task.fromJson(data));
       _loadCache(prefs, 'employees_db', _employeesCache, (data) =>
           Employee.fromJson(data));
@@ -698,7 +760,6 @@ class ApiService {
       _loadCache(prefs, 'hr_docs_db', _hrDocsCache, (data) =>
           HRDocument.fromJson(data));
 
-      // Chargement des listes simples (Map / dynamic)
       String? q = prefs.getString('quotes_db');
       if (q != null) {
         _quotesCache.clear();
@@ -717,6 +778,15 @@ class ApiService {
         _trDataCache.addAll(Map<String, dynamic>.from(jsonDecode(tr)));
       }
 
+      String? tx = prefs.getString('custom_taxes_db');
+      if (tx != null) {
+        Map<String, dynamic> decoded = jsonDecode(tx);
+        _customTaxes.clear();
+        decoded.forEach((key, value) {
+          _customTaxes[key] = List<double>.from(value);
+        });
+      }
+
       _adminPin = prefs.getString('admin_pin_db');
       _isLoadedFromStorage = true;
       debugPrint('Chargement complet réussi !');
@@ -725,8 +795,6 @@ class ApiService {
       _isLoadedFromStorage = true;
     }
   }
-
-
 
   void _loadCache<T>(SharedPreferences prefs, String key, List<T> cache,
       T Function(dynamic) fromJson) {

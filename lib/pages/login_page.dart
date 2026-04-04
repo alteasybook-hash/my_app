@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../dashboard/dashboard_page.dart';
-import 'home_page.dart';
-
-
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -95,8 +92,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -104,13 +103,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SlideTransition(position: _moveAnimation, child: RotationTransition(turns: _rotateAnimation, child: const Text('alt.', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: -1.2)))),
+                SlideTransition(
+                  position: _moveAnimation, 
+                  child: RotationTransition(
+                    turns: _rotateAnimation, 
+                    child: Text('alt.', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: -1.2, color: isDark ? Colors.white : Colors.black))
+                  )
+                ),
                 const SizedBox(height: 10),
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: Column(
                     children: [
-                      const Text('votre assistante personnelle', style: TextStyle(fontSize: 16, color: Colors.black54, fontWeight: FontWeight.w500)),
+                      Text('votre assistante personnelle', style: TextStyle(fontSize: 16, color: isDark ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w500)),
                       const SizedBox(height: 4),
                       const Text('Gérer votre vie pro et perso en un seul endroit', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
                       const SizedBox(height: 40),
@@ -130,17 +135,38 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         _buildField(_confirmPasswordController, 'Confirmer le mot de passe', Icons.lock_reset, isPassword: true),
                       ],
                       const SizedBox(height: 24),
-                      SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: _isLoading ? null : _handleAuth, style: ElevatedButton.styleFrom(backgroundColor: Colors.black, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: _isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Text(_isLogin ? t.login : 'S\'inscrire', style: const TextStyle(fontWeight: FontWeight.bold)))),
+                      SizedBox(
+                        width: double.infinity, 
+                        height: 55, 
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _handleAuth, 
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDark ? const Color(0xFF49F6C7) : Colors.black, 
+                            foregroundColor: isDark ? Colors.black : Colors.white, 
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                          ), 
+                          child: _isLoading 
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                            : Text(_isLogin ? t.login : 'S\'inscrire', style: const TextStyle(fontWeight: FontWeight.bold))
+                        )
+                      ),
                       const SizedBox(height: 16),
-                      // Correction ici : On remplace le chargement réseau par une icône statique pour éviter l'erreur 429
                       OutlinedButton.icon(
                         onPressed: () {},
                         icon: const Icon(Icons.g_mobiledata, size: 28),
                         label: Text(_isLogin ? 'Continuer avec Google' : 'S\'inscrire avec Google'),
-                        style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50), foregroundColor: Colors.black87, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 50), 
+                          foregroundColor: isDark ? Colors.white : Colors.black87, 
+                          side: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                        ),
                       ),
                       const SizedBox(height: 20),
-                      TextButton(onPressed: () => setState(() => _isLogin = !_isLogin), child: Text(_isLogin ? '${t.dontHaveAccount} ${t.register}' : 'Déjà inscrit ? Se connecter', style: const TextStyle(color: Colors.black))),
+                      TextButton(
+                        onPressed: () => setState(() => _isLogin = !_isLogin), 
+                        child: Text(_isLogin ? '${t.dontHaveAccount} ${t.register}' : 'Déjà inscrit ? Se connecter', style: TextStyle(color: isDark ? const Color(0xFF49F6C7) : Colors.black))
+                      ),
                     ],
                   ),
                 ),
@@ -153,6 +179,20 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   Widget _buildField(TextEditingController controller, String label, IconData icon, {bool isPassword = false}) {
-    return TextField(controller: controller, obscureText: isPassword, decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon, size: 18, color: Colors.black54), filled: true, fillColor: Colors.grey[50], border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return TextField(
+      controller: controller, 
+      obscureText: isPassword, 
+      style: TextStyle(color: isDark ? Colors.white : Colors.black),
+      decoration: InputDecoration(
+        labelText: label, 
+        labelStyle: const TextStyle(color: Colors.grey),
+        prefixIcon: Icon(icon, size: 18, color: isDark ? const Color(0xFF49F6C7) : Colors.black54), 
+        filled: true, 
+        fillColor: isDark ? const Color(0xFF232435) : Colors.grey[50], 
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+      )
+    );
   }
 }

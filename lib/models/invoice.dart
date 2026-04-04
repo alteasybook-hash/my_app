@@ -43,6 +43,7 @@ class Invoice {
   final String? paymentTerms; // Immédiat, 15 jours, 30 jours
   final String? linkedQuoteNumber;
   final List<Payment> payments;
+  final List<DateTime> reminderDates; // Historique des relances
 
   Invoice({
     required this.id,
@@ -73,30 +74,23 @@ class Invoice {
     this.paymentTerms,
     this.linkedQuoteNumber,
     this.payments = const [],
+    this.reminderDates = const [],
   });
 
   /// Calcule le total payé en cumulant la liste des paiements détaillés avec conversion
   double get totalPaid {
     if (payments.isEmpty) return amountPaid;
-    
+
     final double sum = payments.fold(0.0, (sum, p) {
-      // 1. Si la facture est en EUR (devise de base de la comptabilité)
-      // On utilise le montant converti du paiement (amountBaseCurrency)
       if (currency == 'EUR') {
         return sum + p.amountBaseCurrency;
       }
-      
-      // 2. Si le paiement est dans la même devise que la facture (ex: Facture USD, Paiement USD)
       if (p.currency == currency) {
         return sum + p.amount;
       }
-      
-      // 3. Cas complexe : Facture en USD, Paiement en GBP.
-      // Dans ce cas, on devrait techniquement convertir le montant base (EUR) vers la devise facture.
-      // Pour l'instant, on simplifie en prenant le montant converti si Invoice n'est pas EUR mais Paiement l'est.
       return sum + p.amountBaseCurrency;
     });
-    
+
     return double.parse(sum.toStringAsFixed(2));
   }
 
@@ -104,7 +98,7 @@ class Invoice {
     final res = amountTTC - totalPaid;
     return res > 0.001 ? double.parse(res.toStringAsFixed(2)) : 0.0;
   }
-  
+
   bool get isPaid => remainingAmount <= 0.01;
 
   Invoice copyWith({
@@ -136,6 +130,7 @@ class Invoice {
     String? paymentTerms,
     String? linkedQuoteNumber,
     List<Payment>? payments,
+    List<DateTime>? reminderDates,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -166,6 +161,7 @@ class Invoice {
       paymentTerms: paymentTerms ?? this.paymentTerms,
       linkedQuoteNumber: linkedQuoteNumber ?? this.linkedQuoteNumber,
       payments: payments ?? this.payments,
+      reminderDates: reminderDates ?? this.reminderDates,
     );
   }
 
@@ -204,10 +200,11 @@ class Invoice {
       payments: (json['payments'] as List?)
           ?.map((p) => Payment.fromJson(p))
           .toList() ?? [],
+      reminderDates: (json['reminderDates'] as List?)
+          ?.map((d) => DateTime.parse(d))
+          .toList() ?? [],
     );
   }
-
-  String? get comment => null;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -218,7 +215,7 @@ class Invoice {
     'amountHT': amountHT,
     'tva': tva,
     'amountTTC': amountTTC,
-    'amountPaid': totalPaid, // On sauvegarde le total réel calculé
+    'amountPaid': totalPaid,
     'currency': currency,
     'date': date.toIso8601String(),
     'dueDate': dueDate?.toIso8601String(),
@@ -238,5 +235,6 @@ class Invoice {
     'paymentTerms': paymentTerms,
     'linkedQuoteNumber': linkedQuoteNumber,
     'payments': payments.map((p) => p.toJson()).toList(),
+    'reminderDates': reminderDates.map((d) => d.toIso8601String()).toList(),
   };
 }

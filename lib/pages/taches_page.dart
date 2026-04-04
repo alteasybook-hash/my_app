@@ -42,6 +42,7 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
 
   void _showTaskSheet({Task? taskToEdit}) {
     final t = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final titleController = TextEditingController(text: taskToEdit?.title ?? '');
     DateTime selectedDate = taskToEdit != null
         ? (DateTime.tryParse(taskToEdit.deadline) ?? DateTime.now())
@@ -60,14 +61,28 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (ctx, setS) => Container(
-          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E2C) : Colors.white, 
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30))
+          ),
           padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 20, top: 20, left: 20, right: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(taskToEdit == null ? t.addTask : 'Modifier tâche', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              Text(
+                taskToEdit == null ? t.addTask : 'Modifier tâche', 
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)
+              ),
               const SizedBox(height: 20),
-              TextField(controller: titleController, decoration: InputDecoration(labelText: t.titleHint, border: const OutlineInputBorder())),
+              TextField(
+                controller: titleController, 
+                style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                decoration: InputDecoration(
+                  labelText: t.titleHint, 
+                  labelStyle: const TextStyle(color: Colors.grey),
+                  border: const OutlineInputBorder()
+                )
+              ),
               const SizedBox(height: 12),
               InkWell(
                 onTap: () async {
@@ -76,12 +91,14 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
                 },
                 child: InputDecorator(
                   decoration: const InputDecoration(labelText: 'Date d\'échéance *', border: OutlineInputBorder()),
-                  child: Text(DateFormat('dd/MM/yyyy').format(selectedDate)),
+                  child: Text(DateFormat('dd/MM/yyyy').format(selectedDate), style: TextStyle(color: isDark ? Colors.white : Colors.black)),
                 ),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<Employee>(
                 value: selectedEmployee,
+                dropdownColor: isDark ? const Color(0xFF232435) : Colors.white,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black),
                 decoration: const InputDecoration(labelText: 'Assigner à (Optionnel)', border: OutlineInputBorder()),
                 items: [
                   const DropdownMenuItem<Employee>(value: null, child: Text("Non assigné")),
@@ -129,20 +146,27 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.pop(context)),
-        title: Text(t.taches, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        bottom: TabBar(controller: _tabController, labelColor: Colors.black, indicatorColor: primaryColor, tabs: [Tab(text: t.todo), Tab(text: t.done)]),
+        leading: IconButton(icon: Icon(Icons.arrow_back_ios, color: isDark ? primaryColor : Colors.black), onPressed: () => Navigator.pop(context)),
+        title: Text(t.taches, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
+        bottom: TabBar(
+          controller: _tabController, 
+          labelColor: isDark ? primaryColor : Colors.black, 
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: primaryColor, 
+          tabs: [Tab(text: t.todo), Tab(text: t.done)]
+        ),
       ),
       body: FutureBuilder<List<Task>>(
         future: _tasksFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return const Center(child: Text('Erreur de chargement'));
+          if (snapshot.hasError) return Center(child: Text('Erreur de chargement', style: TextStyle(color: Colors.red[300])));
           final tasks = snapshot.data ?? [];
           return TabBarView(
             controller: _tabController,
@@ -160,6 +184,8 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
   }
 
   Widget _buildTasksList(List<Task> tasks, bool isDone) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (tasks.isEmpty) return Center(child: Text('Aucune tâche', style: TextStyle(color: isDark ? Colors.grey : Colors.black54)));
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: tasks.length,
@@ -171,25 +197,26 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
         return Card(
           elevation: 0,
           margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDone ? primaryColor : Colors.grey.withOpacity(0.2))),
+          color: isDark ? const Color(0xFF232435) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isDone ? primaryColor : (isDark ? Colors.white10 : Colors.grey.withOpacity(0.2)))),
           child: ListTile(
             leading: IconButton(
-              icon: Icon(isDone ? Icons.check_circle : Icons.radio_button_unchecked, color: isDone ? primaryColor : Colors.black),
+              icon: Icon(isDone ? Icons.check_circle : Icons.radio_button_unchecked, color: isDone ? primaryColor : (isDark ? Colors.white70 : Colors.black)),
               onPressed: () async {
                 await _apiService.updateTask(task.id, {'isDone': !task.isDone});
                 _refreshTasks();
               },
             ),
-            title: Text(task.title, style: TextStyle(fontWeight: FontWeight.bold, decoration: isDone ? TextDecoration.lineThrough : null)),
+            title: Text(task.title, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black, decoration: isDone ? TextDecoration.lineThrough : null)),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (d != null) Text("Échéance: ${DateFormat('dd/MM/yyyy').format(d)}", style: const TextStyle(fontSize: 12)),
-                if (task.assignedToName != null) Text("Assigné à: ${task.assignedToName}", style: TextStyle(fontSize: 11, color: Colors.blue[700])),
+                if (d != null) Text("Échéance: ${DateFormat('dd/MM/yyyy').format(d)}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                if (task.assignedToName != null) Text("Assigné à: ${task.assignedToName}", style: TextStyle(fontSize: 11, color: isDark ? primaryColor : Colors.blue[700])),
               ],
             ),
             trailing: PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
+              icon: Icon(Icons.more_vert, color: isDark ? Colors.white70 : Colors.black),
               onSelected: (val) async {
                 if (val == 'edit') _showTaskSheet(taskToEdit: task);
                 if (val == 'share') {

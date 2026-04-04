@@ -1,37 +1,34 @@
-// lib/widgets/reminder_dialog.dart
-
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import '../models/invoice.dart';
-import '../models/supplier.dart'; // Import pour le modèle Supplier (Client)
-import '../ai/accounting_ai.dart';
+import '../models/supplier.dart';
+import '../models/entity.dart';
 import '../services/api_service.dart';
 
 class ReminderDialog extends StatefulWidget {
   final Invoice invoice;
-  final AccountingAI ai;
 
-  const ReminderDialog({super.key, required this.invoice, required this.ai});
+  const ReminderDialog({super.key, required this.invoice});
 
   @override
   State<ReminderDialog> createState() => _ReminderDialogState();
 }
 
-
 class _ReminderDialogState extends State<ReminderDialog> {
   final TextEditingController _controller = TextEditingController();
   final ApiService _apiService = ApiService();
-  bool _isGenerating = true;
+  bool _isLoading = true;
   String? _customerEmail;
 
   @override
   void initState() {
     super.initState();
-    _loadCustomerAndGenerate();
+    _prepareReminder();
   }
 
-  Future<void> _loadCustomerAndGenerate() async {
-    // 1. On cherche l'email du client dans la base
+  Future<void> _prepareReminder() async {
+    // 1. Chercher l'email du client
     final customers = await _apiService.fetchCustomers();
     final customer = customers.cast<Supplier?>().firstWhere(
           (c) => c?.id == widget.invoice.supplierOrClientId,
@@ -40,43 +37,53 @@ class _ReminderDialogState extends State<ReminderDialog> {
 
     _customerEmail = customer?.email;
 
-    // 2. On génère le texte IA
-    final text = await widget.ai.generateReminderEmail(
-      customerName: widget.invoice.supplierOrClientName,
-      invoiceNumber: widget.invoice.number,
-      amount: widget.invoice.amountTTC,
-      dueDate: widget.invoice.dueDate?.toString() ?? "N/A",
+    // 2. Chercher le nom de l'entité (entreprise)
+    final entities = await _apiService.fetchEntities();
+    final entity = entities.cast<Entity?>().firstWhere(
+      (e) => e?.id == widget.invoice.entityId,
+      orElse: () => null,
     );
+    final String entityName = entity?.name ?? "votre partenaire";
+
+    // 3. Préparer le texte de relance amical
+    final String dueDateStr = widget.invoice.dueDate != null 
+        ? DateFormat('dd/MM/yyyy').format(widget.invoice.dueDate!) 
+        : "N/A";
+
+    final String message = "Bonjour ${widget.invoice.supplierOrClientName},\n\n"
+        "Sauf erreur de notre part, nous n'avons pas encore reçu le règlement de la facture n°${widget.invoice.number} "
+        "d'un montant de ${widget.invoice.amountTTC} €, qui était arrivée à échéance le $dueDateStr.\n\n"
+        "Nous vous remercions de bien vouloir régulariser cette situation dans les meilleurs délais. "
+        "Si votre paiement a déjà été envoyé, nous vous prions de ne pas tenir compte de ce message.\n\n"
+        "En vous souhaitant une excellente journée.\n\n"
+        "Cordialement,\n\n"
+        "$entityName"; // Ajout du nom de l'entité ici
 
     if (mounted) {
       setState(() {
-        _controller.text = text;
-        _isGenerating = false;
+        _controller.text = message;
+        _isLoading = false;
       });
     }
   }
 
   Future<void> _sendEmail() async {
     final String body = Uri.encodeComponent(_controller.text);
-    final String subject = Uri.encodeComponent(
-        "Relance : Facture n°${widget.invoice.number}");
-
-    // Si on a l'email, on le met, sinon on laisse vide pour que l'utilisateur le saisisse
+    final String subject = Uri.encodeComponent("Relance : Facture n°${widget.invoice.number}");
     final String recipient = _customerEmail ?? "";
     final String mailUrl = "mailto:$recipient?subject=$subject&body=$body";
 
     try {
       if (await canLaunchUrl(Uri.parse(mailUrl))) {
         await launchUrl(Uri.parse(mailUrl));
-        if (mounted) Navigator.pop(context, true);
+        if (mounted) Navigator.pop(context, "sent");
       } else {
         throw "Could not launch $mailUrl";
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(
-              "Impossible d'ouvrir votre application de messagerie")),
+          const SnackBar(content: Text("Impossible d'ouvrir votre application de messagerie")),
         );
       }
     }
@@ -84,20 +91,21 @@ class _ReminderDialogState extends State<ReminderDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Row(
         children: [
-          const Icon(Icons.auto_awesome, color: Color(0xFF49F6C7)),
+          const Icon(Icons.mail_outline, color: Color(0xFF49F6C7)),
           const SizedBox(width: 10),
-          const Text("Relance IA",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text("Relance Client",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
         ],
       ),
-      content: _isGenerating
-          ? const SizedBox(height: 150,
-          child: Center(
-              child: CircularProgressIndicator(color: Color(0xFF49F6C7))))
+      content: _isLoading
+          ? const SizedBox(height: 150, child: Center(child: CircularProgressIndicator(color: Color(0xFF49F6C7))))
           : Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,38 +113,35 @@ class _ReminderDialogState extends State<ReminderDialog> {
           if (_customerEmail != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
-              child: Text("À : $_customerEmail", style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold)),
+              child: Text("À : $_customerEmail", 
+                style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
             ),
           TextField(
             controller: _controller,
             maxLines: 10,
-            style: const TextStyle(fontSize: 13),
+            style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black),
             decoration: InputDecoration(
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
-              fillColor: Colors.grey[50],
+              fillColor: isDark ? const Color(0xFF232435) : Colors.grey[50],
             ),
           ),
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context),
-            child: const Text("ANNULER")),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("ANNULER", style: TextStyle(color: Colors.grey)),
+        ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF49F6C7),
             foregroundColor: Colors.black,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             elevation: 0,
           ),
-          onPressed: _isGenerating ? null : _sendEmail,
-          child: const Text("VALIDER & ENVOYER",
-              style: TextStyle(fontWeight: FontWeight.bold)),
+          onPressed: _isLoading ? null : _sendEmail,
+          child: const Text("ENVOYER L'EMAIL", style: TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );
