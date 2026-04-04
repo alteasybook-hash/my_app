@@ -8,7 +8,8 @@ import 'entreprise/reports_page.dart';
 import 'entreprise/global_history_page.dart';
 
 class EntreprisePage extends StatelessWidget {
-  const EntreprisePage({super.key});
+  final VoidCallback? onBack; // Ajout du paramètre
+  const EntreprisePage({super.key, this.onBack});
 
   final Color primaryColor = const Color(0xFF49F6C7);
 
@@ -25,10 +26,10 @@ class EntreprisePage extends StatelessWidget {
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios, color: isDark ? primaryColor : Colors.black),
           onPressed: () {
-            if (Navigator.of(context).canPop()) {
+            if (onBack != null) {
+              onBack!(); // Utilisation du callback
+            } else if (Navigator.of(context).canPop()) {
               Navigator.pop(context);
-            } else {
-              // Si on ne peut pas pop, on est probablement dans un onglet, donc on ne fait rien ou on redirige
             }
           },
         ),

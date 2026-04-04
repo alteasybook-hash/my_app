@@ -101,8 +101,20 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
                 style: TextStyle(color: isDark ? Colors.white : Colors.black),
                 decoration: const InputDecoration(labelText: 'Assigner à (Optionnel)', border: OutlineInputBorder()),
                 items: [
-                  const DropdownMenuItem<Employee>(value: null, child: Text("Non assigné")),
-                  ..._employees.map((e) => DropdownMenuItem(value: e, child: Text("${e.firstName} ${e.lastName}"))),
+                  DropdownMenuItem<Employee>(
+                    value: null, 
+                    child: Text("Non assigné", style: TextStyle(color: isDark ? Colors.white54 : Colors.grey))
+                  ),
+                  ..._employees.map((e) => DropdownMenuItem(
+                    value: e, 
+                    child: Row(
+                      children: [
+                        Text("${e.firstName} ${e.lastName}", style: const TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 8),
+                        Text("(${e.post})", style: TextStyle(fontSize: 11, color: isDark ? primaryColor : Colors.blueGrey, fontStyle: FontStyle.italic)),
+                      ],
+                    )
+                  )),
                 ],
                 onChanged: (v) => setS(() => selectedEmployee = v),
               ),

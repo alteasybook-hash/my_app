@@ -329,7 +329,7 @@ class _DashboardPageState extends State<DashboardPage> {
         backgroundColor: Colors.green[600],
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 2), // CORRECTION : 2 secondes
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -378,8 +378,8 @@ class _DashboardPageState extends State<DashboardPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final List<Widget> pages = [
       _buildHomeContent(),
-      const EntreprisePage(),
-      const SettingsPage(),
+      EntreprisePage(onBack: () => _onItemTapped(0)), // Ajout du callback
+      SettingsPage(onBack: () => _onItemTapped(0)),   // Ajout du callback
     ];
 
     return Scaffold(
