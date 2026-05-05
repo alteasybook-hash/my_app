@@ -8,10 +8,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../../models/bank_transaction.dart';
 import '../../models/reconciliation_record.dart';
-import '../../models/account.dart';
+import '../../models/account_fr.dart';
 import '../../models/history_entry.dart';
 import '../../services/api_service.dart';
 import '../../ai/accounting_ai.dart';
+import '../../l10n/app_localizations.dart';
 
 class RapprochementPage extends StatefulWidget {
   const RapprochementPage({super.key});
@@ -64,7 +65,7 @@ class _RapprochementPageState extends State<RapprochementPage>
       final txs = await _apiService.fetchBankTransactions();
 
       _bankAccountsFromPlan = allAccs.where((acc) =>
-      acc.number.startsWith('512') || acc.number.startsWith('511')).toList();
+      acc.number.startsWith('512')).toList();
 
       if (_bankAccountsFromPlan.isNotEmpty && _selectedBankPlanAccount == null) {
         _selectedBankPlanAccount = _bankAccountsFromPlan.first;
@@ -118,6 +119,7 @@ class _RapprochementPageState extends State<RapprochementPage>
   }
 
   void _runAutoMatching() {
+    final t = AppLocalizations.of(context);
     final pendingSoftwareTx = _bankTransactions.where((t) => !t.isReconciled && !t.id.startsWith('csv-') && (t.bankAccountId == _selectedBankPlanAccount?.id || t.bankAccountId == _selectedBankPlanAccount?.number)).toList();
     final pendingBankTx = _bankTransactions.where((t) => !t.isReconciled && t.id.startsWith('csv-') && (t.bankAccountId == _selectedBankPlanAccount?.id || t.bankAccountId == _selectedBankPlanAccount?.number)).toList();
 
@@ -134,7 +136,7 @@ class _RapprochementPageState extends State<RapprochementPage>
       }
     }
     setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$matchCount correspondances suggérées")));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$matchCount ${t.suggestedMatches}")));
   }
 
   void _validateMatching() async {
@@ -232,6 +234,7 @@ class _RapprochementPageState extends State<RapprochementPage>
   // --- UI ---
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -240,7 +243,7 @@ class _RapprochementPageState extends State<RapprochementPage>
         child: Column(
           children: [
             AppBar(
-              title: Text("Rapprochement Bancaire", style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+              title: Text(t.rapprochement, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
               backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
               elevation: 0,
               leading: IconButton(icon: Icon(Icons.arrow_back_ios, color: isDark ? primaryColor : Colors.black, size: 20), onPressed: () => Navigator.pop(context)),
@@ -251,7 +254,7 @@ class _RapprochementPageState extends State<RapprochementPage>
             ),
             _buildBankBanner(),
             _buildSoldeComptableTotalInfo(),
-            TabBar(controller: _tabController, indicatorColor: primaryColor, labelColor: isDark ? primaryColor : Colors.black, unselectedLabelColor: Colors.grey, tabs: const [Tab(text: "À MATCHER"), Tab(text: "RAPPROCHÉ")]),
+            TabBar(controller: _tabController, indicatorColor: primaryColor, labelColor: isDark ? primaryColor : Colors.black, unselectedLabelColor: Colors.grey, tabs: [Tab(text: t.toMatch), Tab(text: t.reconciled)]),
           ],
         ),
       ),
@@ -274,30 +277,33 @@ class _RapprochementPageState extends State<RapprochementPage>
   }
 
   Widget _buildSoldeComptableTotalInfo() {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(height: 35, padding: const EdgeInsets.symmetric(horizontal: 16), color: isDark ? Colors.black26 : Colors.grey[50],
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        const Text("SOLDE COMPTABLE TOTAL (512) :", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey)),
+        Text(t.totalSoftwareBalance, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey)),
         Text("${_softwareSoldeComptableTotal.toStringAsFixed(2)} €", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _softwareSoldeComptableTotal < 0 ? Colors.red : Colors.green)),
       ]),
     );
   }
 
   Widget _buildMatchingView() {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final softwareItems = _bankTransactions.where((t) => !t.id.startsWith('csv-') && (t.bankAccountId == _selectedBankPlanAccount?.id || t.bankAccountId == _selectedBankPlanAccount?.number) && (!t.isReconciled || t.paymentStatus == 'partial')).toList();
     final bankItems = _bankTransactions.where((t) => t.id.startsWith('csv-') && (t.bankAccountId == _selectedBankPlanAccount?.id || t.bankAccountId == _selectedBankPlanAccount?.number) && !t.isReconciled).toList();
-    return Column(children: [_buildMatchingHeader(), Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Row(children: [Expanded(child: _buildMatchingColumn("RELEVÉ BANCAIRE", Icons.account_balance, bankItems, false)), VerticalDivider(width: 1, color: isDark ? Colors.white10 : Colors.grey[300]), Expanded(child: _buildMatchingColumn("COMPTABILITÉ (512)", Icons.computer, softwareItems, true))])) )]);
+    return Column(children: [_buildMatchingHeader(), Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Row(children: [Expanded(child: _buildMatchingColumn(t.bankStatement, Icons.account_balance, bankItems, false)), VerticalDivider(width: 1, color: isDark ? Colors.white10 : Colors.grey[300]), Expanded(child: _buildMatchingColumn(t.accounting512, Icons.computer, softwareItems, true))])) )]);
   }
 
   Widget _buildMatchingHeader() {
-    double sTotal = _softwareMatchTotal; double bTotal = _bankMatchTotal; double diff = (sTotal - bTotal).abs(); bool isBalanced = diff <= 0.01; bool canMatch = (isBalanced || (sTotal.abs() > bTotal.abs())) && (_selectedSoftwareIds.isNotEmpty && _selectedBankStatementIds.isNotEmpty);
+    final t = AppLocalizations.of(context);
+    double sTotal = _softwareMatchTotal; double bTotal = _bankMatchTotal; double diffValue = (sTotal - bTotal).abs(); bool isBalanced = diffValue <= 0.01; bool canMatch = (isBalanced || (sTotal.abs() > bTotal.abs())) && (_selectedSoftwareIds.isNotEmpty && _selectedBankStatementIds.isNotEmpty);
     return Container(margin: const EdgeInsets.all(12), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), decoration: BoxDecoration(color: const Color(0xFF232435), borderRadius: BorderRadius.circular(12)),
       child: Row(children: [
-        _buildHeaderStat("LOGICIEL", sTotal, Colors.white), const Spacer(),
-        _buildHeaderStat("BANQUE", bTotal, Colors.white), const Spacer(),
-        _buildHeaderStat("DIFF.", sTotal - bTotal, isBalanced ? const Color(0xFF49F6C7) : Colors.orange), const SizedBox(width: 10),
-        ElevatedButton(onPressed: (canMatch && !_isProcessingMatch) ? _validateMatching : null, style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), minimumSize: const Size(80, 32)), child: Text(_isProcessingMatch ? "..." : (sTotal.abs() > bTotal.abs() + 0.01 ? "PARTIEL" : "MATCHER"), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10)))
+        _buildHeaderStat(t.software, sTotal, Colors.white), const Spacer(),
+        _buildHeaderStat(t.bank, bTotal, Colors.white), const Spacer(),
+        _buildHeaderStat(t.diff, sTotal - bTotal, isBalanced ? const Color(0xFF49F6C7) : Colors.orange), const SizedBox(width: 10),
+        ElevatedButton(onPressed: (canMatch && !_isProcessingMatch) ? _validateMatching : null, style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), minimumSize: const Size(80, 32)), child: Text(_isProcessingMatch ? "..." : (sTotal.abs() > bTotal.abs() + 0.01 ? t.partialStatus : t.match), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10)))
       ]),
     );
   }
@@ -307,8 +313,9 @@ class _RapprochementPageState extends State<RapprochementPage>
   }
 
   Widget _buildMatchingColumn(String title, IconData icon, List<BankTransaction> items, bool isSoftwareSide) {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Column(children: [_buildSectionTitle(title, icon), Expanded(child: items.isEmpty ? Center(child: Text("Aucun élément", style: TextStyle(fontSize: 10, color: isDark ? Colors.white38 : Colors.grey[400]))) : ListView.builder(itemCount: items.length, itemBuilder: (ctx, idx) {
+    return Column(children: [_buildSectionTitle(title, icon), Expanded(child: items.isEmpty ? Center(child: Text(t.noItems, style: TextStyle(fontSize: 10, color: isDark ? Colors.white38 : Colors.grey[400]))) : ListView.builder(itemCount: items.length, itemBuilder: (ctx, idx) {
         final tx = items[idx];
         final double displayAmount = (isSoftwareSide && tx.paymentStatus == 'partial' && tx.remainingAmount != null) ? tx.remainingAmount! : tx.amount;
         final bool isSelected = isSoftwareSide ? _selectedSoftwareIds.contains(tx.id) : _selectedBankStatementIds.contains(tx.id);
@@ -320,7 +327,7 @@ class _RapprochementPageState extends State<RapprochementPage>
                   Text(DateFormat('dd/MM').format(tx.date), style: const TextStyle(fontSize: 8, color: Colors.grey)),
                   Text(formatCurrency(displayAmount, tx.currency ?? 'EUR'), style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: displayAmount < 0 ? Colors.red : Colors.green)),
                 ]),
-                if (isSoftwareSide && tx.paymentStatus == 'partial') Container(margin: const EdgeInsets.only(top: 4), padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2), decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.orange.withOpacity(0.3))), child: Text("PARTIEL", style: TextStyle(fontSize: 7, color: Colors.orange[900], fontWeight: FontWeight.bold)))
+                if (isSoftwareSide && tx.paymentStatus == 'partial') Container(margin: const EdgeInsets.only(top: 4), padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2), decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.orange.withOpacity(0.3))), child: Text(t.partialStatus, style: TextStyle(fontSize: 7, color: Colors.orange[900], fontWeight: FontWeight.bold)))
               ])
             )
         );
@@ -333,6 +340,7 @@ class _RapprochementPageState extends State<RapprochementPage>
   }
 
   Widget _buildReconciledView() {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final archivedIds = _pastReconciliations.expand((r) => [...r.bankTxIds, ...r.invoiceIds]).toSet();
     final currentMatchedSoftwareTxs = _bankTransactions.where((t) => t.isReconciled && !t.id.startsWith('csv-') && !archivedIds.contains(t.id) && (t.bankAccountId == _selectedBankPlanAccount?.id || t.bankAccountId == _selectedBankPlanAccount?.number)).toList();
@@ -344,9 +352,9 @@ class _RapprochementPageState extends State<RapprochementPage>
           child: ListView(
             padding: const EdgeInsets.all(12),
             children: [
-              Text("COMPTABILITÉ - LIGNES RAPPROCHÉES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isDark ? Colors.white54 : Colors.grey)),
+              Text(t.reconciledLines, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isDark ? Colors.white54 : Colors.grey)),
               const SizedBox(height: 8),
-              if (currentMatchedSoftwareTxs.isEmpty) Center(child: Padding(padding: const EdgeInsets.all(20), child: Text("Aucune ligne en attente.", style: TextStyle(fontSize: 11, color: isDark ? Colors.white38 : Colors.grey)))),
+              if (currentMatchedSoftwareTxs.isEmpty) Center(child: Padding(padding: const EdgeInsets.all(20), child: Text(t.noPendingLines, style: TextStyle(fontSize: 11, color: isDark ? Colors.white38 : Colors.grey)))),
               ...currentMatchedSoftwareTxs.map((tx) {
                 final isSelected = _selectedReconciledIds.contains(tx.id);
                 return Card(
@@ -357,7 +365,7 @@ class _RapprochementPageState extends State<RapprochementPage>
                     onTap: () => setState(() { if (isSelected) _selectedReconciledIds.remove(tx.id); else _selectedReconciledIds.add(tx.id); }),
                     dense: true, leading: Icon(isSelected ? Icons.check_box : Icons.check_box_outline_blank, color: isSelected ? primaryColor : Colors.grey),
                     title: Text(tx.description, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isDark ? Colors.white : Colors.black), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text("${DateFormat('dd/MM/yyyy').format(tx.date)} • Doc: ${tx.matchedDocumentNumber ?? 'Journal'}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    subtitle: Text("${DateFormat('dd/MM/yyyy').format(tx.date)} • ${t.docPrefix}${tx.matchedDocumentNumber ?? 'Journal'}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                       Text(formatCurrency(tx.amount, tx.currency ?? 'EUR'), style: TextStyle(fontWeight: FontWeight.bold, color: tx.amount < 0 ? Colors.red : Colors.green, fontSize: 11)),
                       IconButton(icon: const Icon(Icons.undo, color: Colors.red, size: 18), onPressed: () => _cancelMatchingPair(tx)),
@@ -366,11 +374,11 @@ class _RapprochementPageState extends State<RapprochementPage>
                 );
               }),
               const Divider(height: 40),
-              Text("HISTORIQUE DES RAPPORTS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isDark ? Colors.white54 : Colors.grey)),
+              Text(t.reportHistory, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isDark ? Colors.white54 : Colors.grey)),
               const SizedBox(height: 8),
               ..._pastReconciliations.where((r) => r.bankAccountId == _selectedBankPlanAccount?.id || r.bankAccountId == _selectedBankPlanAccount?.number).map((rec) =>
                   Card(color: isDark ? const Color(0xFF232435) : Colors.white, elevation: 0, margin: const EdgeInsets.symmetric(vertical: 4), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: isDark ? Colors.white10 : Colors.grey[200]!)),
-                    child: ListTile(dense: true, leading: const Icon(Icons.description, color: Colors.blue), title: Text(DateFormat('MMMM yyyy', 'fr_FR').format(rec.month).toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isDark ? Colors.white : Colors.black)), subtitle: Text("${rec.bankTxIds.length} transactions • ${rec.totalAmount.toStringAsFixed(2)} €", style: const TextStyle(fontSize: 10, color: Colors.grey)), trailing: PopupMenuButton<String>(icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey), onSelected: (v) { if (v == 'cancel') _cancelFullReconciliation(rec); if (v == 'delete') _deleteReportOnly(rec); }, itemBuilder: (c) => [const PopupMenuItem(value: 'cancel', child: Text("Annuler")), const PopupMenuItem(value: 'delete', child: Text("Supprimer"))])),
+                    child: ListTile(dense: true, leading: const Icon(Icons.description, color: Colors.blue), title: Text(DateFormat('MMMM yyyy', Localizations.localeOf(context).toString()).format(rec.month).toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: isDark ? Colors.white : Colors.black)), subtitle: Text("${rec.bankTxIds.length} transactions • ${rec.totalAmount.toStringAsFixed(2)} €", style: const TextStyle(fontSize: 10, color: Colors.grey)), trailing: PopupMenuButton<String>(icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey), onSelected: (v) { if (v == 'cancel') _cancelFullReconciliation(rec); if (v == 'delete') _deleteReportOnly(rec); }, itemBuilder: (c) => [PopupMenuItem(value: 'cancel', child: Text(t.cancel)), PopupMenuItem(value: 'delete', child: Text(t.delete))])),
                   )),
             ],
           ),
@@ -380,6 +388,7 @@ class _RapprochementPageState extends State<RapprochementPage>
   }
 
   Widget _buildFinalValidationHeader(List<BankTransaction> softwareTxs) {
+    final t = AppLocalizations.of(context);
     double totalChecked = 0.0;
     for (var tx in softwareTxs) { if (_selectedReconciledIds.contains(tx.id)) totalChecked += tx.amount; }
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -390,13 +399,13 @@ class _RapprochementPageState extends State<RapprochementPage>
         children: [
           Row(
             children: [
-              Expanded(child: InkWell(onTap: () {}, child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(border: Border.all(color: isDark ? Colors.white24 : Colors.grey[300]!), borderRadius: BorderRadius.circular(8)), child: Text(DateFormat('MMMM yyyy', 'fr_FR').format(_selectedMonth), style: TextStyle(fontSize: 11, color: isDark ? Colors.white : Colors.black))))),
+              Expanded(child: InkWell(onTap: () {}, child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(border: Border.all(color: isDark ? Colors.white24 : Colors.grey[300]!), borderRadius: BorderRadius.circular(8)), child: Text(DateFormat('MMMM yyyy', Localizations.localeOf(context).toString()).format(_selectedMonth), style: TextStyle(fontSize: 11, color: isDark ? Colors.white : Colors.black))))),
               const SizedBox(width: 8),
-              Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.1) : const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8), border: Border.all(color: primaryColor)), child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [const Text("TOTAL SÉLECTIONNÉ", style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)), Text(NumberFormat.simpleCurrency(name: _selectedBankPlanAccount?.currency ?? 'EUR').format(totalChecked), style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? primaryColor : Colors.black))])),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), decoration: BoxDecoration(color: isDark ? Colors.green.withOpacity(0.1) : const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8), border: Border.all(color: primaryColor)), child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(t.totalSelected, style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)), Text(NumberFormat.simpleCurrency(name: _selectedBankPlanAccount?.currency ?? 'EUR').format(totalChecked), style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? primaryColor : Colors.black))])),
             ],
           ),
           const SizedBox(height: 12),
-          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _selectedReconciledIds.isNotEmpty ? () => _performFinalArchive(softwareTxs.where((t) => _selectedReconciledIds.contains(t.id)).toList(), totalChecked) : null, style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text("VALIDER L'ÉTAT ET GÉNÉRER LE RAPPORT", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)))),
+          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _selectedReconciledIds.isNotEmpty ? () => _performFinalArchive(softwareTxs.where((t) => _selectedReconciledIds.contains(t.id)).toList(), totalChecked) : null, style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: Text(t.validateAndReport, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11)))),
         ],
       ),
     );

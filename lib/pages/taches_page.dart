@@ -70,7 +70,7 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                taskToEdit == null ? t.addTask : 'Modifier tâche', 
+                taskToEdit == null ? t.addTask : t.editTask, 
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)
               ),
               const SizedBox(height: 20),
@@ -90,7 +90,7 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
                   if (d != null) setS(() => selectedDate = d);
                 },
                 child: InputDecorator(
-                  decoration: const InputDecoration(labelText: 'Date d\'échéance *', border: OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: t.dueDateLabel, border: const OutlineInputBorder()),
                   child: Text(DateFormat('dd/MM/yyyy').format(selectedDate), style: TextStyle(color: isDark ? Colors.white : Colors.black)),
                 ),
               ),
@@ -99,11 +99,11 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
                 value: selectedEmployee,
                 dropdownColor: isDark ? const Color(0xFF232435) : Colors.white,
                 style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                decoration: const InputDecoration(labelText: 'Assigner à (Optionnel)', border: OutlineInputBorder()),
+                decoration: InputDecoration(labelText: t.assignToOptional, border: const OutlineInputBorder()),
                 items: [
                   DropdownMenuItem<Employee>(
                     value: null, 
-                    child: Text("Non assigné", style: TextStyle(color: isDark ? Colors.white54 : Colors.grey))
+                    child: Text(t.unassigned, style: TextStyle(color: isDark ? Colors.white54 : Colors.grey))
                   ),
                   ..._employees.map((e) => DropdownMenuItem(
                     value: e, 
@@ -178,7 +178,7 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
         future: _tasksFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return Center(child: Text('Erreur de chargement', style: TextStyle(color: Colors.red[300])));
+          if (snapshot.hasError) return Center(child: Text(t.errorLoading, style: TextStyle(color: Colors.red[300])));
           final tasks = snapshot.data ?? [];
           return TabBarView(
             controller: _tabController,
@@ -196,8 +196,9 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
   }
 
   Widget _buildTasksList(List<Task> tasks, bool isDone) {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (tasks.isEmpty) return Center(child: Text('Aucune tâche', style: TextStyle(color: isDark ? Colors.grey : Colors.black54)));
+    if (tasks.isEmpty) return Center(child: Text(t.noTasks, style: TextStyle(color: isDark ? Colors.grey : Colors.black54)));
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: tasks.length,
@@ -223,8 +224,8 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (d != null) Text("Échéance: ${DateFormat('dd/MM/yyyy').format(d)}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                if (task.assignedToName != null) Text("Assigné à: ${task.assignedToName}", style: TextStyle(fontSize: 11, color: isDark ? primaryColor : Colors.blue[700])),
+                if (d != null) Text("${t.dueDatePrefix} ${DateFormat('dd/MM/yyyy').format(d)}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                if (task.assignedToName != null) Text("${t.assignedToPrefix} ${task.assignedToName}", style: TextStyle(fontSize: 11, color: isDark ? primaryColor : Colors.blue[700])),
               ],
             ),
             trailing: PopupMenuButton<String>(
@@ -233,8 +234,8 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
                 if (val == 'edit') _showTaskSheet(taskToEdit: task);
                 if (val == 'share') {
                   String text = "Tâche : ${task.title}";
-                  if (d != null) text += "\nÉchéance : ${DateFormat('dd/MM/yyyy').format(d)}";
-                  if (task.assignedToName != null) text += "\nAssigné à : ${task.assignedToName}";
+                  if (d != null) text += "\n${t.dueDatePrefix} ${DateFormat('dd/MM/yyyy').format(d)}";
+                  if (task.assignedToName != null) text += "\n${t.assignedToPrefix} ${task.assignedToName}";
                   Share.share(text);
                 }
                 if (val == 'delete') {
@@ -243,9 +244,9 @@ class _TachesPageState extends State<TachesPage> with SingleTickerProviderStateM
                 }
               },
               itemBuilder: (context) => [
-                const PopupMenuItem(value: 'edit', child: Text('Modifier')),
-                const PopupMenuItem(value: 'share', child: Text('Partager')),
-                const PopupMenuItem(value: 'delete', child: Text('Supprimer', style: TextStyle(color: Colors.red))),
+                PopupMenuItem(value: 'edit', child: Text(t.edit)),
+                PopupMenuItem(value: 'share', child: Text(t.share)),
+                PopupMenuItem(value: 'delete', child: Text(t.delete, style: const TextStyle(color: Colors.red))),
               ],
             ),
           ),

@@ -182,6 +182,7 @@ class EntreprisePage extends StatelessWidget {
   }
 
   Widget _buildHistoryMiniBlock(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return InkWell(
       onTap: () {
         Navigator.push(
@@ -209,23 +210,23 @@ class EntreprisePage extends StatelessWidget {
               child: Icon(Icons.history_toggle_off_rounded, color: primaryColor, size: 24),
             ),
             const SizedBox(width: 16),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "HISTORIQUE GÉNÉRAL",
-                    style: TextStyle(
+                    t.globalHistory,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                       letterSpacing: 0.5,
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
-                    "Suivi des modifications et suppressions",
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                    t.globalHistorySub,
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
                   ),
                 ],
               ),

@@ -11,7 +11,48 @@ enum InvoiceStatus {
   rejected,
   deleted,
   extourned,
-  kept, draft
+  kept, draft, pdpReceivedByClient
+}
+
+enum PdpStatus {
+  none,
+  pending,    // En attente
+  received,   // Reçu
+  confirmed,  // Confirmé
+  rejected    // Rejeté
+}
+
+class InvoiceItem {
+  final String product;
+  final double quantity;
+  final double unitPriceHT;
+  final double tvaRate;
+
+  InvoiceItem({
+    required this.product,
+    required this.quantity,
+    required this.unitPriceHT,
+    this.tvaRate = 20.0,
+  });
+
+  double get totalHT => quantity * unitPriceHT;
+  double get totalTTC => totalHT * (1 + tvaRate / 100);
+
+  factory InvoiceItem.fromJson(Map<String, dynamic> json) {
+    return InvoiceItem(
+      product: json['product'] ?? '',
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 0.0,
+      unitPriceHT: (json['unitPriceHT'] as num?)?.toDouble() ?? 0.0,
+      tvaRate: (json['tvaRate'] as num?)?.toDouble() ?? 20.0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'product': product,
+    'quantity': quantity,
+    'unitPriceHT': unitPriceHT,
+    'tvaRate': tvaRate,
+  };
 }
 
 class Invoice {
@@ -21,9 +62,9 @@ class Invoice {
   final String supplierOrClientName;
   final String designation;
   final double amountHT;
-  final double tva; // Taux de TVA
+  final double tva; 
   final double amountTTC;
-  final double amountPaid; // Montant historiquement payé (champ de base)
+  final double amountPaid;
   final String currency;
   final DateTime date;
   final DateTime? dueDate;
@@ -36,14 +77,28 @@ class Invoice {
   final String? bankAccountId;
   final DateTime? paymentDate;
   final String? paymentMethod;
-  final bool isReconciled; // Signifie "Matché" avec une transaction
+  final bool isReconciled;
   final DateTime? reconciledDate;
   final String? category;
-  final String? reconciliationId; // ID du rapprochement mensuel finalisé
-  final String? paymentTerms; // Immédiat, 15 jours, 30 jours
+  final String? reconciliationId;
+  final String? paymentTerms;
   final String? linkedQuoteNumber;
   final List<Payment> payments;
-  final List<DateTime> reminderDates; // Historique des relances
+  final List<DateTime> reminderDates;
+  final String? costCenterCode;
+  final List<InvoiceItem> items;
+  final String? siren;
+  final String? vatNumber;
+  final String? address;
+  final String? country;
+  final String? nomenclatureCode;
+  final String? deliveryAddress;
+  final bool isArchived;
+  final DateTime? archiveDate;
+  final String? fileHash;
+  final PdpStatus pdpStatus;
+  final DateTime? pdpSentDate;
+  final String? rejectionReason; // Raison du rejet PDP
 
   Invoice({
     required this.id,
@@ -75,22 +130,29 @@ class Invoice {
     this.linkedQuoteNumber,
     this.payments = const [],
     this.reminderDates = const [],
+    this.costCenterCode,
+    this.items = const [],
+    this.siren,
+    this.vatNumber,
+    this.address,
+    this.country,
+    this.nomenclatureCode,
+    this.deliveryAddress,
+    this.isArchived = false,
+    this.archiveDate,
+    this.fileHash,
+    this.pdpStatus = PdpStatus.none,
+    this.pdpSentDate,
+    this.rejectionReason,
   });
 
-  /// Calcule le total payé en cumulant la liste des paiements détaillés avec conversion
   double get totalPaid {
     if (payments.isEmpty) return amountPaid;
-
     final double sum = payments.fold(0.0, (sum, p) {
-      if (currency == 'EUR') {
-        return sum + p.amountBaseCurrency;
-      }
-      if (p.currency == currency) {
-        return sum + p.amount;
-      }
+      if (currency == 'EUR') return sum + p.amountBaseCurrency;
+      if (p.currency == currency) return sum + p.amount;
       return sum + p.amountBaseCurrency;
     });
-
     return double.parse(sum.toStringAsFixed(2));
   }
 
@@ -131,6 +193,20 @@ class Invoice {
     String? linkedQuoteNumber,
     List<Payment>? payments,
     List<DateTime>? reminderDates,
+    String? costCenterCode,
+    List<InvoiceItem>? items,
+    String? siren,
+    String? vatNumber,
+    String? address,
+    String? country,
+    String? nomenclatureCode,
+    String? deliveryAddress,
+    bool? isArchived,
+    DateTime? archiveDate,
+    String? fileHash,
+    PdpStatus? pdpStatus,
+    DateTime? pdpSentDate,
+    String? rejectionReason,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -162,6 +238,20 @@ class Invoice {
       linkedQuoteNumber: linkedQuoteNumber ?? this.linkedQuoteNumber,
       payments: payments ?? this.payments,
       reminderDates: reminderDates ?? this.reminderDates,
+      costCenterCode: costCenterCode ?? this.costCenterCode,
+      items: items ?? this.items,
+      siren: siren ?? this.siren,
+      vatNumber: vatNumber ?? this.vatNumber,
+      address: address ?? this.address,
+      country: country ?? this.country,
+      nomenclatureCode: nomenclatureCode ?? this.nomenclatureCode,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      isArchived: isArchived ?? this.isArchived,
+      archiveDate: archiveDate ?? this.archiveDate,
+      fileHash: fileHash ?? this.fileHash,
+      pdpStatus: pdpStatus ?? this.pdpStatus,
+      pdpSentDate: pdpSentDate ?? this.pdpSentDate,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
     );
   }
 
@@ -170,7 +260,7 @@ class Invoice {
       id: json['id']?.toString() ?? '',
       number: json['number'] ?? '',
       quoteNumber: json['quoteNumber'],
-      supplierOrClientName: json['supplierOrClientName'] ?? '',
+      supplierOrClientName: json['supplierName'] ?? json['supplierOrClientName'] ?? 'Inconnu',
       designation: json['designation'] ?? '',
       amountHT: double.tryParse(json['amountHT']?.toString() ?? '0') ?? 0,
       tva: double.tryParse(json['tva']?.toString() ?? '0') ?? 0,
@@ -203,8 +293,27 @@ class Invoice {
       reminderDates: (json['reminderDates'] as List?)
           ?.map((d) => DateTime.parse(d))
           .toList() ?? [],
+      costCenterCode: json['costCenterCode'],
+      items: (json['items'] as List?)?.map((i) => InvoiceItem.fromJson(i)).toList() ?? [],
+      siren: json['siren'],
+      vatNumber: json['vatNumber'],
+      address: json['address'],
+      country: json['country'],
+      nomenclatureCode: json['nomenclatureCode'],
+      deliveryAddress: json['deliveryAddress'],
+      isArchived: json['isArchived'] ?? false,
+      archiveDate: json['archiveDate'] != null ? DateTime.parse(json['archiveDate']) : null,
+      fileHash: json['fileHash'],
+      pdpStatus: PdpStatus.values.firstWhere(
+        (e) => e.toString().split('.').last == json['pdpStatus'],
+        orElse: () => PdpStatus.none,
+      ),
+      pdpSentDate: json['pdpSentDate'] != null ? DateTime.parse(json['pdpSentDate']) : null,
+      rejectionReason: json['rejectionReason'],
     );
   }
+
+  String? get supplier => null;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -236,5 +345,19 @@ class Invoice {
     'linkedQuoteNumber': linkedQuoteNumber,
     'payments': payments.map((p) => p.toJson()).toList(),
     'reminderDates': reminderDates.map((d) => d.toIso8601String()).toList(),
+    'costCenterCode': costCenterCode,
+    'items': items.map((i) => i.toJson()).toList(),
+    'siren': siren,
+    'vatNumber': vatNumber,
+    'address': address,
+    'country': country,
+    'nomenclatureCode': nomenclatureCode,
+    'deliveryAddress': deliveryAddress,
+    'isArchived': isArchived,
+    'archiveDate': archiveDate?.toIso8601String(),
+    'fileHash': fileHash,
+    'pdpStatus': pdpStatus.toString().split('.').last,
+    'pdpSentDate': pdpSentDate?.toIso8601String(),
+    'rejectionReason': rejectionReason,
   };
 }

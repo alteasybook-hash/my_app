@@ -71,6 +71,7 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
   }
 
   Future<void> _handleDelete(String id) async {
+    final t = AppLocalizations.of(context);
     try {
       await _apiService.deleteEvent(id);
       if (mounted) {
@@ -133,7 +134,7 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
               children: [
                 Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 20),
-                Text(eventToEdit == null ? t.newRdv : 'Modifier RDV', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                Text(eventToEdit == null ? t.newRdv : t.editRdv, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
                 const SizedBox(height: 20),
                 TextField(
                   controller: titleController, 
@@ -145,7 +146,7 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
                   value: selectedType,
                   dropdownColor: isDark ? const Color(0xFF232435) : Colors.white,
                   style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                  decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Type', labelStyle: TextStyle(color: Colors.grey)),
+                  decoration: InputDecoration(border: const OutlineInputBorder(), labelText: t.typeLabel, labelStyle: const TextStyle(color: Colors.grey)),
                   items: ['perso', 'pro', 'voyage'].map((type) => DropdownMenuItem(value: type, child: Text(type.toUpperCase()))).toList(),
                   onChanged: (v) => setModalState(() => selectedType = v!),
                 ),
@@ -241,7 +242,7 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
         future: _eventsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return Center(child: Text('Erreur de chargement', style: TextStyle(color: Colors.red[300])));
+          if (snapshot.hasError) return Center(child: Text(t.errorLoading, style: TextStyle(color: Colors.red[300])));
 
           final events = snapshot.data ?? [];
           return TabBarView(
@@ -260,8 +261,9 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildEventList(List<RdvEvent> events) {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (events.isEmpty) return Center(child: Text('Aucun rendez-vous', style: TextStyle(color: isDark ? Colors.grey : Colors.black54)));
+    if (events.isEmpty) return Center(child: Text(t.noRdv, style: TextStyle(color: isDark ? Colors.grey : Colors.black54)));
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: events.length,
@@ -291,9 +293,9 @@ class _RdvPageState extends State<RdvPage> with SingleTickerProviderStateMixin {
                 if (val == 'complete') _handleStatusChange(event);
               },
               itemBuilder: (ctx) => [
-                if (event.status == RdvStatus.pending) const PopupMenuItem(value: 'complete', child: Text('Terminer')),
-                const PopupMenuItem(value: 'edit', child: Text('Modifier')),
-                const PopupMenuItem(value: 'delete', child: Text('Supprimer', style: TextStyle(color: Colors.red))),
+                if (event.status == RdvStatus.pending) PopupMenuItem(value: 'complete', child: Text(t.complete)),
+                PopupMenuItem(value: 'edit', child: Text(t.edit)),
+                PopupMenuItem(value: 'delete', child: Text(t.delete, style: const TextStyle(color: Colors.red))),
               ],
             ),
           ),

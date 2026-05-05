@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../dashboard/dashboard_page.dart';
+import '../widgets/professional_background.dart';
+import '../services/api_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -27,6 +29,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _companyController = TextEditingController();
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
@@ -74,18 +77,47 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   Future<void> _handleAuth() async {
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (!mounted) return;
 
-    if (_emailController.text.contains('@') && _passwordController.text.length > 3) {
-      if (!_isLogin && _passwordController.text != _confirmPasswordController.text) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mots de passe différents'), backgroundColor: Colors.redAccent));
+    if (_isLogin) {
+      // --- LOGIN RÉEL ---
+      final result = await _apiService.login(
+          _emailController.text, _passwordController.text);
+
+      if (result['success']) {
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (_) => const DashboardPage()));
       } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DashboardPage()));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(result['message']), backgroundColor: Colors.red),
+        );
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez entrer des identifiants valides'), backgroundColor: Colors.orange));
+      // --- INSCRIPTION RÉELLE ---
+      final userData = {
+        'email': _emailController.text,
+        'password': _passwordController.text,
+        'firstName': _firstNameController.text,
+        'lastName': _lastNameController.text,
+        'companyName': _companyController.text,
+      };
+
+      final result = await _apiService.register(userData);
+
+      if (result['success']) {
+        setState(() => _isLogin = true); // Basculer vers login après succès
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Inscription réussie ! Connectez-vous.'),
+              backgroundColor: Colors.green),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(result['message']), backgroundColor: Colors.red),
+        );
+      }
     }
+
     setState(() => _isLoading = false);
   }
 
@@ -94,84 +126,82 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 30),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SlideTransition(
-                  position: _moveAnimation, 
-                  child: RotationTransition(
-                    turns: _rotateAnimation, 
-                    child: Text('alt.', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: -1.2, color: isDark ? Colors.white : Colors.black))
-                  )
-                ),
-                const SizedBox(height: 10),
-                FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Column(
-                    children: [
-                      Text('votre assistante personnelle', style: TextStyle(fontSize: 16, color: isDark ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 4),
-                      const Text('Gérer votre vie pro et perso en un seul endroit', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
-                      const SizedBox(height: 40),
-                      if (!_isLogin) ...[
-                        _buildField(_firstNameController, 'Prénom', Icons.person_outline),
-                        const SizedBox(height: 12),
-                        _buildField(_lastNameController, 'Nom', Icons.person_outline),
-                        const SizedBox(height: 12),
-                        _buildField(_companyController, 'Raison Sociale (Optionnel)', Icons.business_outlined),
-                        const SizedBox(height: 12),
-                      ],
-                      _buildField(_emailController, t.email, Icons.email_outlined),
+    return ProfessionalBackground(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 30),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SlideTransition(
+                position: _moveAnimation, 
+                child: RotationTransition(
+                  turns: _rotateAnimation, 
+                  child: Text('alt.', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: -1.2, color: isDark ? Colors.white : Colors.black))
+                )
+              ),
+              const SizedBox(height: 10),
+              FadeTransition(
+                opacity: _fadeAnimation,
+                child: Column(
+                  children: [
+                    Text('votre assistante personnelle', style: TextStyle(fontSize: 16, color: isDark ? Colors.white70 : Colors.black54, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    const Text('Gérer votre vie pro et perso en un seul endroit', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
+                    const SizedBox(height: 40),
+                    if (!_isLogin) ...[
+                      _buildField(_firstNameController, 'Prénom', Icons.person_outline),
                       const SizedBox(height: 12),
-                      _buildField(_passwordController, t.password, Icons.lock_outline, isPassword: true),
-                      if (!_isLogin) ...[
-                        const SizedBox(height: 12),
-                        _buildField(_confirmPasswordController, 'Confirmer le mot de passe', Icons.lock_reset, isPassword: true),
-                      ],
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity, 
-                        height: 55, 
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleAuth, 
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isDark ? const Color(0xFF49F6C7) : Colors.black, 
-                            foregroundColor: isDark ? Colors.black : Colors.white, 
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                          ), 
-                          child: _isLoading 
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                            : Text(_isLogin ? t.login : 'S\'inscrire', style: const TextStyle(fontWeight: FontWeight.bold))
-                        )
-                      ),
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.g_mobiledata, size: 28),
-                        label: Text(_isLogin ? 'Continuer avec Google' : 'S\'inscrire avec Google'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 50), 
-                          foregroundColor: isDark ? Colors.white : Colors.black87, 
-                          side: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      TextButton(
-                        onPressed: () => setState(() => _isLogin = !_isLogin), 
-                        child: Text(_isLogin ? '${t.dontHaveAccount} ${t.register}' : 'Déjà inscrit ? Se connecter', style: TextStyle(color: isDark ? const Color(0xFF49F6C7) : Colors.black))
-                      ),
+                      _buildField(_lastNameController, 'Nom', Icons.person_outline),
+                      const SizedBox(height: 12),
+                      _buildField(_companyController, 'Raison Sociale (Optionnel)', Icons.business_outlined),
+                      const SizedBox(height: 12),
                     ],
-                  ),
+                    _buildField(_emailController, t.email, Icons.email_outlined),
+                    const SizedBox(height: 12),
+                    _buildField(_passwordController, t.password, Icons.lock_outline, isPassword: true),
+                    if (!_isLogin) ...[
+                      const SizedBox(height: 12),
+                      _buildField(_confirmPasswordController, 'Confirmer le mot de passe', Icons.lock_reset, isPassword: true),
+                    ],
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity, 
+                      height: 55, 
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _handleAuth, 
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? const Color(0xFF49F6C7) : Colors.black, 
+                          foregroundColor: isDark ? Colors.black : Colors.white, 
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                        ), 
+                        child: _isLoading 
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                          : Text(_isLogin ? t.login : 'S\'inscrire', style: const TextStyle(fontWeight: FontWeight.bold))
+                      )
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.g_mobiledata, size: 28),
+                      label: Text(_isLogin ? 'Continuer avec Google' : 'S\'inscrire avec Google'),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: isDark ? Colors.transparent : Colors.white70,
+                        minimumSize: const Size(double.infinity, 50), 
+                        foregroundColor: isDark ? Colors.white : Colors.black87, 
+                        side: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextButton(
+                      onPressed: () => setState(() => _isLogin = !_isLogin), 
+                      child: Text(_isLogin ? '${t.dontHaveAccount} ${t.register}' : 'Déjà inscrit ? Se connecter', style: TextStyle(color: isDark ? const Color(0xFF49F6C7) : Colors.black))
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -189,8 +219,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         labelStyle: const TextStyle(color: Colors.grey),
         prefixIcon: Icon(icon, size: 18, color: isDark ? const Color(0xFF49F6C7) : Colors.black54), 
         filled: true, 
-        fillColor: isDark ? const Color(0xFF232435) : Colors.grey[50], 
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
+        fillColor: isDark ? const Color(0xFF232435) : Colors.white.withOpacity(0.8), 
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: isDark ? BorderSide.none : const BorderSide(color: Colors.black12)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
       )
     );

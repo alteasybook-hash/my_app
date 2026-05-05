@@ -45,19 +45,27 @@ class _ReminderDialogState extends State<ReminderDialog> {
     );
     final String entityName = entity?.name ?? "votre partenaire";
 
-    // 3. Préparer le texte de relance amical
+    // 3. Préparer le texte de relance
     final String dueDateStr = widget.invoice.dueDate != null 
         ? DateFormat('dd/MM/yyyy').format(widget.invoice.dueDate!) 
         : "N/A";
 
-    final String message = "Bonjour ${widget.invoice.supplierOrClientName},\n\n"
+    final int reminderCount = widget.invoice.reminderDates.length + 1;
+    String prefix = "Relance";
+    if (reminderCount == 1) prefix = "Première relance";
+    else if (reminderCount == 2) prefix = "Deuxième relance";
+    else if (reminderCount == 3) prefix = "Troisième relance";
+    else prefix = "$reminderCountème relance";
+
+    final String message = "Objet : $prefix - Facture n°${widget.invoice.number}\n\n"
+        "Bonjour ${widget.invoice.supplierOrClientName},\n\n"
         "Sauf erreur de notre part, nous n'avons pas encore reçu le règlement de la facture n°${widget.invoice.number} "
         "d'un montant de ${widget.invoice.amountTTC} €, qui était arrivée à échéance le $dueDateStr.\n\n"
         "Nous vous remercions de bien vouloir régulariser cette situation dans les meilleurs délais. "
         "Si votre paiement a déjà été envoyé, nous vous prions de ne pas tenir compte de ce message.\n\n"
         "En vous souhaitant une excellente journée.\n\n"
         "Cordialement,\n\n"
-        "$entityName"; // Ajout du nom de l'entité ici
+        "$entityName";
 
     if (mounted) {
       setState(() {
@@ -69,12 +77,18 @@ class _ReminderDialogState extends State<ReminderDialog> {
 
   Future<void> _sendEmail() async {
     final String body = Uri.encodeComponent(_controller.text);
-    final String subject = Uri.encodeComponent("Relance : Facture n°${widget.invoice.number}");
+    final String subject = Uri.encodeComponent("Relance n°${widget.invoice.reminderDates.length + 1} : Facture n°${widget.invoice.number}");
     final String recipient = _customerEmail ?? "";
     final String mailUrl = "mailto:$recipient?subject=$subject&body=$body";
 
     try {
       if (await canLaunchUrl(Uri.parse(mailUrl))) {
+        // Enregistrer la date de relance dans la base de données via l'API
+        final List<DateTime> updatedReminders = List.from(widget.invoice.reminderDates)..add(DateTime.now());
+        await _apiService.updateInvoice(widget.invoice.id, {
+          'reminderDates': updatedReminders.map((d) => d.toIso8601String()).toList(),
+        });
+
         await launchUrl(Uri.parse(mailUrl));
         if (mounted) Navigator.pop(context, "sent");
       } else {
@@ -96,12 +110,25 @@ class _ReminderDialogState extends State<ReminderDialog> {
     return AlertDialog(
       backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.mail_outline, color: Color(0xFF49F6C7)),
-          const SizedBox(width: 10),
-          Text("Relance Client",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+          Row(
+            children: [
+              const Icon(Icons.mail_outline, color: Color(0xFF49F6C7)),
+              const SizedBox(width: 10),
+              Text("Relance Client",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+            ],
+          ),
+          if (widget.invoice.reminderDates.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                "${widget.invoice.reminderDates.length} relance(s) déjà envoyée(s)",
+                style: const TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.bold),
+              ),
+            ),
         ],
       ),
       content: _isLoading

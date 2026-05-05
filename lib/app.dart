@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/app_localizations.dart';
 import 'pages/login_page.dart';
+import 'widgets/professional_background.dart';
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -70,14 +71,24 @@ class _MyAppState extends State<MyApp> {
       theme: ThemeData(
         brightness: Brightness.light,
         primaryColor: const Color(0xFF49F6C7),
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
-        appBarTheme: const AppBarTheme(backgroundColor: Colors.white, elevation: 0),
+        scaffoldBackgroundColor: Colors.transparent, // Crucial pour voir le background global
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent, 
+          elevation: 0,
+          iconTheme: IconThemeData(color: Colors.black),
+          titleTextStyle: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
+        ),
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF49F6C7),
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF121212), elevation: 0),
+        scaffoldBackgroundColor: Colors.transparent, // Crucial pour voir le background global
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent, 
+          elevation: 0,
+          iconTheme: IconThemeData(color: Colors.white),
+          titleTextStyle: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+        ),
       ),
       supportedLocales: const [
         Locale('fr'),
@@ -90,6 +101,11 @@ class _MyAppState extends State<MyApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      builder: (context, child) {
+        return ProfessionalBackground(
+          child: child!,
+        );
+      },
       home: const LoginPage(),
     );
   }

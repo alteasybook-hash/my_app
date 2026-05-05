@@ -1,18 +1,13 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // Le plugin Flutter doit être appliqué après Android et Kotlin
     id("dev.flutter.flutter-gradle-plugin")
-    // START: FlutterFire Configuration
     id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
 }
-
-val apiKey: String = (project.findProperty("API_KEY") as? String) ?: ""
 
 android {
     namespace = "altassistante.fr.my_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -26,14 +21,13 @@ android {
 
     defaultConfig {
         applicationId = "altassistante.fr.my_app"
-
-        // Ces valeurs sont automatiquement récupérées depuis votre SDK Flutter
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
+        targetSdk = 35
+
+        versionCode = flutter.versionCode.toInt()
         versionName = flutter.versionName
 
-        buildConfigField("String", "API_KEY", "\"$apiKey\"")
+        buildConfigField("String", "API_KEY", "\"${project.findProperty("apiKey") ?: ""}\"")
     }
 
     buildFeatures {
@@ -43,6 +37,8 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
@@ -52,5 +48,5 @@ flutter {
 }
 
 dependencies {
-    // Les dépendances Flutter sont gérées automatiquement par le plugin.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }

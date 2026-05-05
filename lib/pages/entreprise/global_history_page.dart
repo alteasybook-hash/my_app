@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
+import '../../widgets/professional_background.dart';
 
 class GlobalHistoryPage extends StatefulWidget {
   const GlobalHistoryPage({super.key});  @override
@@ -19,40 +20,54 @@ class _GlobalHistoryPageState extends State<GlobalHistoryPage> {
   }
 
   Future<void> _loadHistory() async {
-    final data = await _apiService.fetchHistory(); // Récupère tout le cache historique
-    setState(() {
-      _historyEntries = data;
-      _historyEntries.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      _isLoading = false;
-    });
+    final data = await _apiService.fetchHistory(); 
+    if (mounted) {
+      setState(() {
+        _historyEntries = data;
+        _historyEntries.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        _isLoading = false;
+      });
+    }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Historique de l'entreprise", style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return ProfessionalBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent, // Pour voir le background dégradé
+        appBar: AppBar(
+          title: Text(
+            "Historique de l'entreprise", 
+            style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 18, fontWeight: FontWeight.bold)
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios, color: isDark ? Colors.white : Colors.black, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
+        body: _isLoading
+            ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
+            : _buildGroupedHistory(),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildGroupedHistory(),
     );
   }
 
   Widget _buildGroupedHistory() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_historyEntries.isEmpty) {
-      return const Center(child: Text("Aucun mouvement enregistré"));
+      return Center(
+        child: Text(
+          "Aucun mouvement enregistré",
+          style: TextStyle(color: isDark ? Colors.white70 : Colors.grey),
+        ),
+      );
     }
 
-    // Groupement par mois
     Map<String, List<dynamic>> grouped = {};
     for (var entry in _historyEntries) {
       String month = DateFormat.yMMMM('fr_FR').format(entry.timestamp);
@@ -61,24 +76,19 @@ class _GlobalHistoryPageState extends State<GlobalHistoryPage> {
     }
 
     return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       children: grouped.keys.map((month) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Ligne de séparation par mois
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    month.toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
-                  ),
-                  const Divider(thickness: 1),
-                ],
+              padding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              child: Text(
+                month.toUpperCase(),
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.2, color: Colors.blueGrey),
               ),
             ),
+            const Divider(thickness: 0.5),
             ...grouped[month]!.map((entry) => _buildHistoryTile(entry)).toList(),
           ],
         );
@@ -87,81 +97,40 @@ class _GlobalHistoryPageState extends State<GlobalHistoryPage> {
   }
 
   Widget _buildHistoryTile(dynamic entry) {
-    return ListTile(
-      dense: true,
-      leading: Icon(
-        entry.action.toString().contains('deleted') ? Icons.delete_outline : Icons.edit_note,
-        color: entry.action.toString().contains('deleted') ? Colors.red : Colors.orange,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool isDeleted = entry.action.toString().contains('deleted');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF232435) : Colors.white.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.1)),
       ),
-      title: Text(
-        "${entry.documentNumber} (${entry.type.toString().split('.').last})",
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      child: ListTile(
+        dense: true,
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (isDeleted ? Colors.red : Colors.orange).withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            isDeleted ? Icons.delete_outline : Icons.edit_note,
+            color: isDeleted ? Colors.red : Colors.orange,
+            size: 20,
+          ),
+        ),
+        title: Text(
+          "${entry.documentNumber} (${entry.type.toString().split('.').last})",
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+        ),
+        subtitle: Text(
+          "Le ${DateFormat('dd/MM à HH:mm').format(entry.timestamp)}",
+          style: TextStyle(fontSize: 11, color: isDark ? Colors.white54 : Colors.black54),
+        ),
+        trailing: Icon(Icons.chevron_right, size: 16, color: isDark ? Colors.white24 : Colors.grey),
       ),
-      subtitle: Text(
-        "Le ${DateFormat('dd/MM à HH:mm').format(entry.timestamp)}",
-        style: const TextStyle(fontSize: 11),
-      ),
-      trailing: const Icon(Icons.more_vert, size: 18),
     );
   }
-}
-
-// --- AJOUTEZ CETTE FONCTION ---
-Widget _buildHistoryMiniBlock(BuildContext context) {
-  return Padding(
-    padding: const EdgeInsets.only(top: 24.0),
-    child: InkWell(
-      onTap: () {
-        // Lien vers la page d'historique
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const GlobalHistoryPage()));
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.black, // Case noire
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF49F6C7).withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                  Icons.history_toggle_off_rounded, color: Color(0xFF49F6C7),
-                  size: 24),
-            ),
-            const SizedBox(width: 16),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "HISTORIQUE GÉNÉRAL",
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        letterSpacing: 0.5
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    "Suivi des modifications et suppressions",
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.white, size: 20),
-          ],
-        ),
-      ),
-    ),
-  );
 }

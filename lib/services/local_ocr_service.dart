@@ -1,12 +1,14 @@
 import 'dart:io';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:intl/intl.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:crypto/crypto.dart';
 
 class LocalOCRService {
   final TextRecognizer _textRecognizer = TextRecognizer(
       script: TextRecognitionScript.latin);
+
+  LocalOCRService();
 
   Future<Map<String, dynamic>> processImage(String path) async {
     String imagePath = path;
@@ -17,15 +19,13 @@ class LocalOCRService {
         final document = await PdfDocument.openFile(path);
         final page = await document.getPage(1);
         final pageImage = await page.render(
-          width: page.width * 2, // Haute résolution pour une meilleure lecture
-          height: page.height * 2,
+          width: page.width * 3,
+          height: page.height * 3,
           format: PdfPageImageFormat.png,
         );
 
         final tempDir = await getTemporaryDirectory();
-        tempFile = File('${tempDir.path}/temp_ocr_page_${DateTime
-            .now()
-            .millisecondsSinceEpoch}.png');
+        tempFile = File('${tempDir.path}/temp_ocr_${DateTime.now().millisecondsSinceEpoch}.png');
         await tempFile.writeAsBytes(pageImage!.bytes);
         imagePath = tempFile.path;
 
@@ -34,234 +34,123 @@ class LocalOCRService {
       }
 
       final inputImage = InputImage.fromFilePath(imagePath);
-      final RecognizedText recognizedText = await _textRecognizer.processImage(
-          inputImage);
-
+      final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
       String fullText = recognizedText.text;
+      String lowerText = fullText.toLowerCase();
 
-      // Extraction avancée
-      final amounts = _extractAmountsDetailed(fullText);
-      final supplier = _extractSupplier(fullText);
-      final categorization = _suggestCategoryAndAccount(supplier, fullText);
+      final amounts = _extractAmountsImproved(recognizedText);
+
+      // Détection du type NDF et alignement des comptes
+      String? expenseAccount;
+      String? category;
+
+      if (lowerText.contains('restaurant') || lowerText.contains('brasserie') || lowerText.contains('diner') || lowerText.contains('repas')) {
+        expenseAccount = '625700'; // Réceptions
+        category = 'RESTAURANT';
+      } else if (lowerText.contains('taxi') || lowerText.contains('uber') || lowerText.contains('bolt')) {
+        expenseAccount = '625100'; // Voyages et déplacements
+        category = 'TAXI';
+      } else if (lowerText.contains('hotel') || lowerText.contains('ibis') || lowerText.contains('novotel') || lowerText.contains('nuitée')) {
+        expenseAccount = '625100'; // Voyages et déplacements
+        category = 'HOTEL';
+      } else if (lowerText.contains('sncf') || lowerText.contains('train') || lowerText.contains('billet')) {
+        expenseAccount = '625100';
+        category = 'TRAIN';
+      } else if (lowerText.contains('essence') || lowerText.contains('carburant') || lowerText.contains('gasoil') || lowerText.contains('totalenergies')) {
+        expenseAccount = '606100'; // Fournitures non stockables (énergie)
+        category = 'CARBURANT';
+      }
 
       return {
-        'supplierName': supplier,
+        'supplierName': _extractSupplierImproved(recognizedText),
+        'invoiceNumber': _extractInvoiceNumberImproved(fullText),
+        'date': _extractDateImproved(fullText),
         'amountTTC': amounts['ttc'],
         'amountHT': amounts['ht'],
         'tva': amounts['tva'],
         'tvaRate': amounts['tvaRate'],
-        'date': _extractDate(fullText),
-        'invoiceNumber': _extractInvoiceNumber(fullText),
-        'category': categorization['category'],
-        'expenseAccount': categorization['account'],
-        'designation': categorization['designation'] ??
-            'Achat ${supplier ?? ""}',
+        'currency': _extractCurrency(fullText),
+        'type': 'achat',
+
+        'category': category,
+        'expenseAccount': expenseAccount,
+
+        'siren': _extractRegex(fullText, r'\b\d{3}\s?\d{3}\s?\d{3}\b')?.replaceAll(' ', ''),
+        'vatNumber': _extractRegex(fullText, r'FR\s?\d{2}\s?\d{9}', caseSensitive: false),
+
+        'rawText': fullText,
       };
+
+
     } catch (e) {
-      return {'error': 'Erreur lors du traitement du fichier: $e'};
+      print("Erreur OCR Locale: $e");
+      return {'error': 'Erreur scanner: $e'};
     } finally {
-      if (tempFile != null && await tempFile.exists()) {
-        await tempFile.delete();
+      if (tempFile != null && await tempFile.exists()) await tempFile.delete();
+    }
+  }
+
+  String? _extractSupplierImproved(RecognizedText recognizedText) {
+    if (recognizedText.blocks.isEmpty) return null;
+    for (var block in recognizedText.blocks.take(3)) {
+      String firstLine = block.text.split('\n').first.trim();
+      if (firstLine.length > 2 &&
+          !firstLine.toUpperCase().contains('FACTURE') &&
+          !firstLine.toUpperCase().contains('REÇU') &&
+          !firstLine.toUpperCase().contains('NOTE') &&
+          !RegExp(r'^\d').hasMatch(firstLine)) {
+        return firstLine;
       }
     }
+    return "Fournisseur Inconnu";
   }
 
-  String? _extractSupplier(String text) {
-    final lines = text.split('\n');
-    if (lines.isEmpty) return null;
-
-    // On cherche les noms sur les 5 premières lignes (en ignorant les chiffres)
-    for (int i = 0; i < lines.length && i < 10; i++) {
-      String clean = lines[i].trim();
-      if (clean.length > 3 &&
-          !clean.contains(RegExp(r'\d{5}')) && // Pas un code postal
-          !RegExp(r'^(FACT|INV|REF|DATE|N.)', caseSensitive: false).hasMatch(
-              clean)) {
-        return clean;
-      }
+  Map<String, double> _extractAmountsImproved(RecognizedText recognizedText) {
+    String text = recognizedText.text.replaceAll(',', '.');
+    final matches = RegExp(r'(\d+[\s.]\d{2})').allMatches(text);
+    List<double> values = [];
+    for (var m in matches) {
+      String clean = m.group(0)!.replaceAll(' ', '');
+      double? val = double.tryParse(clean);
+      if (val != null) values.add(val);
     }
-    return lines.first.trim();
+
+    if (values.isEmpty) return {'ttc': 0.0, 'ht': 0.0, 'tva': 0.0, 'tvaRate': 20.0};
+    
+    values.sort((a, b) => b.compareTo(a));
+    double ttc = values.first;
+
+    double rate = 20.0;
+    if (text.contains('5.5%') || text.contains('5,5')) rate = 5.5;
+    else if (text.contains('10%') || text.contains('10,0')) rate = 10.0;
+    else if (text.contains('2.1%') || text.contains('2,1')) rate = 2.1;
+
+    double ht = double.parse((ttc / (1 + (rate / 100))).toStringAsFixed(2));
+    double tva = double.parse((ttc - ht).toStringAsFixed(2));
+
+    return {'ttc': ttc, 'ht': ht, 'tva': tva, 'tvaRate': rate};
   }
 
-  Map<String, double?> _extractAmountsDetailed(String text) {
-    // Nettoyage des caractères spéciaux pour les montants
-    String cleanText = text.replaceAll(
-        RegExp(r'\s(?=\d)'), ''); // Supprime les espaces entre chiffres
-    cleanText = cleanText.replaceAll(',', '.').replaceAll('€', '').replaceAll(
-        'EUR', '');
-
-    double? ttc;
-    double? ht;
-    double? tva;
-    double? tvaRate;
-
-    // 1. Détection du Taux de TVA (ex: 20%, 5.5%) - Priorité haute
-    final RegExp rateRegex = RegExp(
-        r'(\d{1,2}[\.,]?\d?)[\s]*%', caseSensitive: false);
-    final rateMatch = rateRegex.firstMatch(text);
-    if (rateMatch != null) {
-      tvaRate = double.tryParse(rateMatch.group(1)!.replaceAll(',', '.'));
-    }
-
-    // 2. Recherche TTC (Patterns multiples)
-    final List<RegExp> ttcPatterns = [
-      RegExp(
-          r'(TOTAL\s*TTC|NET\s*A\s*PAYER|TOTAL\s*A\s*PAYER|TTC)[\s:]*([0-9]+\.[0-9]{2})',
-          caseSensitive: false),
-      RegExp(r'(TOTAL)[\s:]*([0-9]+\.[0-9]{2})$', caseSensitive: false,
-          multiLine: true), // Souvent en fin de doc
-    ];
-
-    for (var pattern in ttcPatterns) {
-      final match = pattern.firstMatch(cleanText);
-      if (match != null) {
-        ttc = double.tryParse(match.group(2)!);
-        if (ttc != null) break;
-      }
-    }
-
-    // 3. Recherche HT
-    final List<RegExp> htPatterns = [
-      RegExp(r'(TOTAL\s*HT|HT|MONTANT\s*HT)[\s:]*([0-9]+\.[0-9]{2})',
-          caseSensitive: false),
-      RegExp(r'(NET\s*HT)[\s:]*([0-9]+\.[0-9]{2})', caseSensitive: false),
-    ];
-
-    for (var pattern in htPatterns) {
-      final match = pattern.firstMatch(cleanText);
-      if (match != null) {
-        ht = double.tryParse(match.group(2)!);
-        if (ht != null) break;
-      }
-    }
-
-    // 4. Recherche Montant TVA
-    final RegExp tvaRegExp = RegExp(
-        r'(TVA|TAXE|DONT\s*TVA)[\s:]*([0-9]+\.[0-9]{2})', caseSensitive: false);
-    final tvaMatch = tvaRegExp.firstMatch(cleanText);
-    if (tvaMatch != null) {
-      tva = double.tryParse(tvaMatch.group(2)!);
-    }
-
-    // --- Logique Comptable Correctrice ---
-    if (tvaRate == null) {
-      if (text.toLowerCase().contains("tva non applicable") ||
-          text.toLowerCase().contains("article 293b")) {
-        tvaRate = 0.0;
-        tva = 0.0;
-      } else {
-        tvaRate = 20.0; // Défaut France
-      }
-    }
-
-    if (ttc != null && ht == null) {
-      ht = ttc / (1 + (tvaRate / 100));
-      tva = ttc - ht;
-    } else if (ht != null && tva != null && ttc == null) {
-      ttc = ht + tva;
-    } else if (ttc != null && ht != null && tva == null) {
-      tva = ttc - ht;
-    }
-
-    return {
-      'ttc': ttc != null ? double.parse(ttc.toStringAsFixed(2)) : null,
-      'ht': ht != null ? double.parse(ht.toStringAsFixed(2)) : null,
-      'tva': tva != null ? double.parse(tva.toStringAsFixed(2)) : null,
-      'tvaRate': tvaRate,
-    };
+  String? _extractDateImproved(String text) {
+    return _extractRegex(text, r'(\d{2}[/\-.]\d{2}[/\-.]\d{4})') ??
+           _extractRegex(text, r'(\d{4}[/\-.]\d{2}[/\-.]\d{2})');
   }
 
-  Map<String, String> _suggestCategoryAndAccount(String? supplier,
-      String text) {
-    String fullLower = (supplier ?? "" + text).toLowerCase();
-
-    // Téléphonie & Internet
-    if (fullLower.contains(RegExp(
-        r'orange|sfr|free|bouygues|telecom|internet|cloud|aws|google\s*cloud|microsoft|adobe|zoom'))) {
-      return {
-        'category': 'IT / Télécom',
-        'account': '626000',
-        'designation': 'Abonnement & Services IT'
-      };
-    }
-    // Énergie & Utilitaires
-    if (fullLower.contains(
-        RegExp(r'edf|engie|totalenergies|veolia|eau|electricite|gaz'))) {
-      return {
-        'category': 'Énergie',
-        'account': '606100',
-        'designation': 'Consommables Énergie'
-      };
-    }
-    // Transport & Mobilité
-    if (fullLower.contains(RegExp(
-        r'sncf|uber|bolt|taxi|train|avion|air\s*france|petrole|total\s*access|essence'))) {
-      return {
-        'category': 'Transport',
-        'account': '625100',
-        'designation': 'Déplacements'
-      };
-    }
-    // Fournitures Bureau
-    if (fullLower.contains(
-        RegExp(r'amazon|fnac|cdiscount|bureau\s*vallee|staples|office|ikea'))) {
-      return {
-        'category': 'Fournitures',
-        'account': '606300',
-        'designation': 'Petit matériel / Fournitures'
-      };
-    }
-    // Restauration
-    if (fullLower.contains(RegExp(
-        r'restau|dejeuner|repas|cafe|brasserie|monoprix|carrefour|auchan|lidl'))) {
-      return {
-        'category': 'Repas',
-        'account': '625700',
-        'designation': 'Frais de réception'
-      };
-    }
-    // Assurance
-    if (fullLower.contains(
-        RegExp(r'axa|allianz|mma|generali|assurance|mutuelle'))) {
-      return {
-        'category': 'Assurance',
-        'account': '616000',
-        'designation': 'Primes d\'assurance'
-      };
-    }
-    // Services Bancaires
-    if (fullLower.contains(RegExp(
-        r'banque|bnp|societe\s*generale|qonto|revolut|frais\s*bancaires'))) {
-      return {
-        'category': 'Frais Bancaires',
-        'account': '627800',
-        'designation': 'Commissions bancaires'
-      };
-    }
-
-    return {
-      'category': 'Achats divers',
-      'account': '601000',
-      'designation': 'Achat de biens et services'
-    };
+  String? _extractInvoiceNumberImproved(String text) {
+    final match = RegExp(r'(?:N°|Facture|INV|Ref|Note)[\s:]*([A-Z0-9\-_]{4,})', caseSensitive: false).firstMatch(text);
+    return match?.group(1)?.trim();
   }
 
-  String? _extractDate(String text) {
-    final RegExp dateRegExp = RegExp(
-        r'(\d{2}/\d{2}/\d{4})|(\d{2}-\d{2}-\d{4})|(\d{4}/\d{2}/\d{2})');
-    final match = dateRegExp.firstMatch(text);
-    return match?.group(0);
+  String _extractCurrency(String text) {
+    if (text.contains('€') || text.contains('EUR')) return 'EUR';
+    if (text.contains('\$') || text.contains('USD')) return 'USD';
+    return 'EUR';
   }
 
-  String? _extractInvoiceNumber(String text) {
-    final RegExp invRegExp = RegExp(
-        r'(N°|Facture|INV|Ref|Pièce)[\s:]*([A-Z0-9-]{4,})',
-        caseSensitive: false);
-    final match = invRegExp.firstMatch(text);
-    return match?.group(2);
+  String? _extractRegex(String text, String pattern, {bool caseSensitive = true}) {
+    final reg = RegExp(pattern, caseSensitive: caseSensitive);
+    return reg.firstMatch(text)?.group(0);
   }
 
-  void dispose() {
-    _textRecognizer.close();
-  }
+  void dispose() => _textRecognizer.close();
 }

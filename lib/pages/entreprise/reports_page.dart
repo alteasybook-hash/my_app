@@ -11,8 +11,12 @@ import '../../services/api_service.dart';
 import '../../models/invoice.dart';
 import '../../models/entity.dart';
 import '../../models/bank_transaction.dart';
-import '../../models/account.dart';
+import '../../models/account_fr.dart';
+import '../../models/account_de.dart';
+import '../../models/account_uk.dart';
+import '../../models/account_us.dart';
 import '../../models/journal_entry.dart';
+import '../../l10n/app_localizations.dart';
 
 class ReportsPage extends StatefulWidget {
   const ReportsPage({super.key});
@@ -82,7 +86,7 @@ class _ReportsPageState extends State<ReportsPage> {
     _totalDepenses = entityAchats.fold(0, (sum, i) => sum + i.amountHT);
 
     _bankBalances.clear();
-    final bankAccounts = accounts.where((acc) => acc.number.startsWith('512') || acc.number.startsWith('511')).toList();
+    final bankAccounts = accounts.where((acc) => acc.number.startsWith('512')).toList();
 
     for (var acc in bankAccounts) {
       final endOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0, 23, 59, 59);
@@ -119,11 +123,12 @@ class _ReportsPageState extends State<ReportsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("RAPPORT & ANALYSE", style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 14)),
+        title: Text(t.reports.toUpperCase(), style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 14)),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black), onPressed: () => Navigator.pop(context)),
@@ -135,21 +140,21 @@ class _ReportsPageState extends State<ReportsPage> {
           _buildEntitySelector(), const SizedBox(height: 15),
           _buildMonthNavigator(), const SizedBox(height: 25),
           _buildPerformanceCard(), const SizedBox(height: 25),
-          _buildSectionTitle("DISPONIBILITÉS PAR BANQUE"), const SizedBox(height: 15),
+          _buildSectionTitle(t.availabilitiesByBank), const SizedBox(height: 15),
           _buildBankBalancesList(), const SizedBox(height: 30),
-          _buildSectionTitle("ANALYSE DES FLUX (6 MOIS)"), const SizedBox(height: 15),
+          _buildSectionTitle(t.flowAnalysis6Months), const SizedBox(height: 15),
           _buildAnalysisChart(), const SizedBox(height: 30),
-          _buildSectionTitle("EXPORTS COMPTABLES"), const SizedBox(height: 15),
-          _buildExportTile("Journal des Achats", "Export Excel pour le mois", Icons.receipt_long_rounded, () => _exportExcel('achats')),
-          _buildExportTile("Journal des Ventes", "Export Excel pour le mois", Icons.point_of_sale_rounded, () => _exportExcel('ventes')),
-          _buildExportTile("Grand Livre (PDF)", "Synthèse pour l'expert comptable", Icons.picture_as_pdf_rounded, _exportGrandLivrePdf),
+          _buildSectionTitle(t.accountingExports), const SizedBox(height: 15),
+          _buildExportTile(t.purchasesJournal, t.exportExcelMonth, Icons.receipt_long_rounded, () => _exportExcel('achats')),
+          _buildExportTile(t.salesJournal, t.exportExcelMonth, Icons.point_of_sale_rounded, () => _exportExcel('ventes')),
+          _buildExportTile(t.generalLedger, t.expertSummary, Icons.picture_as_pdf_rounded, _exportGrandLivrePdf),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: _sendToExpertComptable,
               icon: const Icon(Icons.send_rounded, color: Colors.black, size: 18),
-              label: const Text("ENVOYER À L'EXPERT COMPTABLE", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
+              label: Text(t.sendToExpert.toUpperCase(), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
                 padding: const EdgeInsets.symmetric(vertical: 15),
@@ -165,10 +170,11 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   Widget _buildMonthNavigator() {
+    final locale = Localizations.localeOf(context).toString();
     return Container(padding: const EdgeInsets.symmetric(vertical: 4), decoration: BoxDecoration(color: darkColor, borderRadius: BorderRadius.circular(15)),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         IconButton(icon: Icon(Icons.chevron_left, color: primaryColor), onPressed: () => setState(() { _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1); _loadAllData(); })),
-        Text("${DateFormat('MMMM', 'fr_FR').format(_selectedMonth).toUpperCase()} ${_selectedMonth.year}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+        Text("${DateFormat('MMMM', locale).format(_selectedMonth).toUpperCase()} ${_selectedMonth.year}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
         IconButton(icon: Icon(Icons.chevron_right, color: primaryColor), onPressed: () => setState(() { _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1); _loadAllData(); })),
       ]),
     );
@@ -182,12 +188,13 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   Widget _buildPerformanceCard() {
+    final t = AppLocalizations.of(context);
     final double net = _totalRevenu - _totalDepenses;
     return Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: darkColor, borderRadius: BorderRadius.circular(25), boxShadow: [BoxShadow(color: primaryColor.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))]),
       child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_buildStat("CA (HT)", "${_totalRevenu.toStringAsFixed(0)} €", primaryColor), Container(width: 1, height: 40, color: Colors.white10), _buildStat("CHARGES", "${_totalDepenses.toStringAsFixed(0)} €", Colors.orangeAccent)]),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_buildStat(t.caHt, "${_totalRevenu.toStringAsFixed(0)} €", primaryColor), Container(width: 1, height: 40, color: Colors.white10), _buildStat(t.charges, "${_totalDepenses.toStringAsFixed(0)} €", Colors.orangeAccent)]),
         const Divider(height: 40, color: Colors.white10),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("RÉSULTAT DU MOIS", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)), const SizedBox(height: 4), Text("${(net).toStringAsFixed(2)} €", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900))]), _buildStatusBadge(net >= 0 ? "BÉNÉFICE" : "DÉFICIT", net >= 0 ? Colors.greenAccent : Colors.redAccent)]),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t.monthlyResult, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)), const SizedBox(height: 4), Text("${(net).toStringAsFixed(2)} €", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900))]), _buildStatusBadge(net >= 0 ? t.profit : t.deficit, net >= 0 ? Colors.greenAccent : Colors.redAccent)]),
       ]),
     );
   }
@@ -195,14 +202,16 @@ class _ReportsPageState extends State<ReportsPage> {
   Widget _buildStatusBadge(String label, Color color) { return Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 10))); }
 
   Widget _buildBankBalancesList() {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (_bankBalances.isEmpty) return Center(child: Text("Aucun compte bancaire", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey : Colors.grey)));
+    if (_bankBalances.isEmpty) return Center(child: Text(t.noBankAccount, style: TextStyle(fontSize: 12, color: isDark ? Colors.grey : Colors.grey)));
     return Column(children: _bankBalances.entries.map((e) => Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: isDark ? const Color(0xFF232435) : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.withOpacity(0.15))),
-      child: Row(children: [CircleAvatar(backgroundColor: Colors.blue[50], child: const Icon(Icons.account_balance, color: Colors.blue, size: 20)), const SizedBox(width: 15), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(e.value['label'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black), overflow: TextOverflow.ellipsis), Text("Solde au ${DateFormat('dd/MM').format(DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0))}", style: const TextStyle(color: Colors.grey, fontSize: 10))])), Text("${(e.value['balance'] as double).toStringAsFixed(2)} ${e.value['currency']}", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: e.value['balance'] >= 0 ? (isDark ? primaryColor : Colors.black) : Colors.red))]),
+      child: Row(children: [CircleAvatar(backgroundColor: Colors.blue[50], child: const Icon(Icons.account_balance, color: Colors.blue, size: 20)), const SizedBox(width: 15), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(e.value['label'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black), overflow: TextOverflow.ellipsis), Text("${t.balanceAt} ${DateFormat('dd/MM').format(DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0))}", style: const TextStyle(color: Colors.grey, fontSize: 10))])), Text("${(e.value['balance'] as double).toStringAsFixed(2)} ${e.value['currency']}", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: e.value['balance'] >= 0 ? (isDark ? primaryColor : Colors.black) : Colors.red))]),
     )).toList());
   }
 
   Widget _buildAnalysisChart() {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_monthlyData.isEmpty) return const SizedBox();
     double maxVal = 0;
@@ -211,7 +220,7 @@ class _ReportsPageState extends State<ReportsPage> {
 
     return Container(height: 220, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: isDark ? const Color(0xFF232435) : Colors.grey[50], borderRadius: BorderRadius.circular(25)),
       child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.end, children: [_chartLegend("CA", primaryColor), const SizedBox(width: 15), _chartLegend("Charges", Colors.redAccent)]),
+        Row(mainAxisAlignment: MainAxisAlignment.end, children: [_chartLegend(t.revenueChart, primaryColor), const SizedBox(width: 15), _chartLegend(t.expensesChart, Colors.redAccent)]),
         const Spacer(),
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, crossAxisAlignment: CrossAxisAlignment.end, children: _monthlyData.map((d) => Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Container(width: 12, height: (d['revenu']! / maxVal) * 120 + 2, decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(3))),
@@ -219,22 +228,23 @@ class _ReportsPageState extends State<ReportsPage> {
           Container(width: 12, height: (d['depense']! / maxVal) * 120 + 2, decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.7), borderRadius: BorderRadius.circular(3))),
         ])).toList()),
         const SizedBox(height: 10),
-        const Text("Évolution des 6 derniers mois", style: TextStyle(color: Colors.grey, fontSize: 10)),
+        Text(t.evolution6Months, style: const TextStyle(color: Colors.grey, fontSize: 10)),
       ]),
     );
   }
 
   Widget _chartLegend(String l, Color c) => Row(children: [Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)), const SizedBox(width: 5), Text(l, style: const TextStyle(fontSize: 10, color: Colors.grey))]);
   Widget _buildStat(String l, String v, Color c) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(l, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)), const SizedBox(height: 5), Text(v, style: TextStyle(color: c, fontSize: 22, fontWeight: FontWeight.w900))]);
-  Widget _buildSectionTitle(String t) => Text(t, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.2, color: Colors.blueGrey));
-  Widget _buildExportTile(String t, String s, IconData i, VoidCallback o) {
+  Widget _buildSectionTitle(String title) => Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.2, color: Colors.blueGrey));
+  Widget _buildExportTile(String title, String subtitle, IconData i, VoidCallback o) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: isDark ? const Color(0xFF232435) : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.withOpacity(0.1))), child: ListTile(dense: true, leading: Icon(i, color: isDark ? Colors.white : Colors.black, size: 20), title: Text(t, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black)), subtitle: Text(s, style: const TextStyle(fontSize: 10, color: Colors.grey)), trailing: const Icon(Icons.download_rounded, size: 18, color: Colors.blue), onTap: o));
+    return Container(margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: isDark ? const Color(0xFF232435) : Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.withOpacity(0.1))), child: ListTile(dense: true, leading: Icon(i, color: isDark ? Colors.white : Colors.black, size: 20), title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black)), subtitle: Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.grey)), trailing: const Icon(Icons.download_rounded, size: 18, color: Colors.blue), onTap: o));
   }
 
   // --- LOGIQUE D'EXPORT ---
 
   Future<void> _exportExcel(String type) async {
+    final t = AppLocalizations.of(context);
     try {
       var excel = ex.Excel.createExcel();
       var sheet = excel[type.toUpperCase()];
@@ -243,7 +253,7 @@ class _ReportsPageState extends State<ReportsPage> {
           ? _allAchats.where((i) => i.date.year == _selectedMonth.year && i.date.month == _selectedMonth.month).toList()
           : _allVentes.where((i) => i.date.year == _selectedMonth.year && i.date.month == _selectedMonth.month).toList();
 
-      sheet.appendRow(['Date', 'Numéro', 'Tiers', 'HT', 'TVA', 'TTC'].map((e) => ex.TextCellValue(e)).toList());
+      sheet.appendRow([t.dateLabel, t.invNumber, 'Tiers', t.ht_label, t.tva_label, t.totalTTC].map((e) => ex.TextCellValue(e)).toList());
 
       for (var i in items) {
         sheet.appendRow([
@@ -268,6 +278,8 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   Future<void> _exportGrandLivrePdf() async {
+    final t = AppLocalizations.of(context);
+    final locale = Localizations.localeOf(context).toString();
     final pdf = pw.Document();
     final font = await PdfGoogleFonts.notoSansRegular();
     final boldFont = await PdfGoogleFonts.notoSansBold();
@@ -276,12 +288,12 @@ class _ReportsPageState extends State<ReportsPage> {
       pageFormat: PdfPageFormat.a4,
       theme: pw.ThemeData.withFont(base: font, bold: boldFont),
       build: (context) => [
-        pw.Header(level: 0, child: pw.Text("GRAND LIVRE - ${DateFormat('MMMM yyyy', 'fr_FR').format(_selectedMonth).toUpperCase()}")),
+        pw.Header(level: 0, child: pw.Text("${t.generalLedger.toUpperCase()} - ${DateFormat('MMMM yyyy', locale).format(_selectedMonth).toUpperCase()}")),
         pw.SizedBox(height: 20),
-        pw.Text("Entité : ${_selectedEntity?.name ?? 'N/A'}"),
+        pw.Text("${t.issuer} : ${_selectedEntity?.name ?? 'N/A'}"),
         pw.SizedBox(height: 10),
         pw.TableHelper.fromTextArray(
-          headers: ['Date', 'Compte', 'Libellé', 'Débit', 'Crédit'],
+          headers: [t.dateLabel, t.bankAccount, t.label, t.debit, t.credit],
           data: _allJournalEntries.where((e) => e.date.year == _selectedMonth.year && e.date.month == _selectedMonth.month).expand((e) => e.lines.map((l) => [
             DateFormat('dd/MM').format(e.date),
             l.accountCode,
@@ -297,14 +309,14 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   void _sendToExpertComptable() {
+    final t = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Préparation de l'envoi des documents à l'expert comptable..."), backgroundColor: Color(0xFF232435)),
+      SnackBar(content: Text(t.sendingDocuments), backgroundColor: const Color(0xFF232435)),
     );
-    // Simuler un délai d'envoi
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Documents envoyés avec succès !"), backgroundColor: Colors.green),
+          SnackBar(content: Text(t.documentsSentSuccess), backgroundColor: Colors.green),
         );
       }
     });

@@ -1,9 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/invoice.dart';
-import '../models/account.dart';
+import '../models/account_fr.dart';
 import '../models/entity.dart';
 import '../models/supplier.dart';
+import '../l10n/app_localizations.dart';
+
+const Color primaryColor = Color(0xFF49F6C7);
+
+InputDecoration _getInputDecoration(String label, {bool isDark = false, bool dense = false, Widget? suffixIcon}) {
+  return InputDecoration(
+    labelText: label,
+    isDense: dense,
+    suffixIcon: suffixIcon,
+    labelStyle: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 12),
+    border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
+    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: dense ? 10 : 14),
+  );
+}
 
 void showQuoteDialog({
   required BuildContext context,
@@ -13,6 +27,9 @@ void showQuoteDialog({
   required List<Account> accounts,
   required Function(Invoice) onSave,
 }) {
+  final t = AppLocalizations.of(context);
+  final bool isDark = Theme.of(context).brightness == Brightness.dark;
+  
   // 1. Initialisation des données
   String? entityId = quoteToEdit?.entityId ??
       (entities.isNotEmpty ? entities.first.id : null);
@@ -35,7 +52,7 @@ void showQuoteDialog({
       text: quoteToEdit?.amountHT.toString() ?? '0');
 
   DateTime quoteDate = quoteToEdit?.date ?? DateTime.now();
-  String? paymentTerms = quoteToEdit?.paymentTerms ?? '30 jours';
+  String? paymentTerms = quoteToEdit?.paymentTerms ?? t.thirtyDays;
   double tvaR = 20.0;
 
   // Filtrer les comptes de produits (Classe 7)
@@ -51,6 +68,7 @@ void showQuoteDialog({
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
+    backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
     shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (ctx) =>
@@ -66,10 +84,10 @@ void showQuoteDialog({
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(quoteToEdit == null
-                          ? 'Nouveau Devis'
-                          : 'Modifier Devis',
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
+                          ? t.newQuote
+                          : t.edit,
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
                       const SizedBox(height: 24),
 
                       // Émetteur et Devise
@@ -78,31 +96,37 @@ void showQuoteDialog({
                           Expanded(
                             flex: 2,
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              isDense: true,
+                              dropdownColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black),
                               value: entities.any((e) => e.id == entityId)
                                   ? entityId
                                   : null,
                               items: entities
                                   .map((e) =>
                                   DropdownMenuItem(
-                                      value: e.id, child: Text(e.name)))
+                                      value: e.id, child: Text(e.name, style: const TextStyle(fontSize: 11))))
                                   .toList(),
                               onChanged: (v) => setS(() => entityId = v),
-                              decoration: const InputDecoration(
-                                  labelText: 'Émetteur *'),
+                              decoration: _getInputDecoration(t.issuer + ' *', isDark: isDark, dense: true),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              isDense: true,
+                              dropdownColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black),
                               value: selectedCurrency,
                               items: ['EUR', 'USD', 'GBP', 'CHF']
                                   .map((c) =>
-                                  DropdownMenuItem(value: c, child: Text(c)))
+                                  DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 11))))
                                   .toList(),
                               onChanged: (v) =>
                                   setS(() => selectedCurrency = v!),
-                              decoration: const InputDecoration(
-                                  labelText: 'Devise'),
+                              decoration: _getInputDecoration(t.currency, isDark: isDark, dense: true),
                             ),
                           ),
                         ],
@@ -111,12 +135,16 @@ void showQuoteDialog({
 
                       // Client
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        isDense: true,
+                        dropdownColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black),
                         value: suppliers.any((s) => s.id == selectedPartnerId)
                             ? selectedPartnerId
                             : null,
                         items: suppliers
                             .map((s) =>
-                            DropdownMenuItem(value: s.id, child: Text(s.name)))
+                            DropdownMenuItem(value: s.id, child: Text(s.name, style: const TextStyle(fontSize: 11))))
                             .toList(),
                         onChanged: (v) {
                           setS(() {
@@ -128,13 +156,16 @@ void showQuoteDialog({
                             }
                           });
                         },
-                        decoration: const InputDecoration(
-                            labelText: 'Client *'),
+                        decoration: _getInputDecoration(t.customers + ' *', isDark: isDark, dense: true),
                       ),
                       const SizedBox(height: 16),
 
                       // Compte de Produit
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        isDense: true,
+                        dropdownColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black),
                         value: productAccounts.any((a) =>
                         a.number == selectedProductAccount)
                             ? selectedProductAccount
@@ -147,29 +178,27 @@ void showQuoteDialog({
                             )).toList(),
                         onChanged: (v) =>
                             setS(() => selectedProductAccount = v),
-                        decoration: const InputDecoration(
-                            labelText: 'Compte de produit (Vente)'),
+                        decoration: _getInputDecoration(t.chartOfAccounts, isDark: isDark, dense: true),
                       ),
                       const SizedBox(height: 16),
 
-                      TextField(controller: numC,
-                          decoration: const InputDecoration(
-                              labelText: 'N° devis *')),
+                      TextField(
+                        controller: numC,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                        decoration: _getInputDecoration(t.quotes + ' N° *', isDark: isDark, dense: true)),
                       const SizedBox(height: 16),
-                      TextField(controller: desC,
-                          decoration: const InputDecoration(
-                              labelText: 'Désignation (Titre)')),
+                      TextField(
+                        controller: desC,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                        decoration: _getInputDecoration(t.label + ' (Titre)', isDark: isDark, dense: true)),
                       const SizedBox(height: 16),
 
                       // Description longue
                       TextField(
                         controller: longDescC,
                         maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: 'Description détaillée (Détails prestations)',
-                          alignLabelWithHint: true,
-                          border: OutlineInputBorder(),
-                        ),
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                        decoration: _getInputDecoration(t.description + ' (Détails)', isDark: isDark, dense: true),
                       ),
                       const SizedBox(height: 16),
 
@@ -180,25 +209,28 @@ void showQuoteDialog({
                             flex: 2,
                             child: TextField(
                               controller: htC,
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black),
                               keyboardType: const TextInputType
                                   .numberWithOptions(decimal: true),
-                              decoration: const InputDecoration(
-                                  labelText: 'Montant HT *'),
+                              decoration: _getInputDecoration(t.totalHT + ' *', isDark: isDark, dense: true),
                               onChanged: (v) => setS(() {}),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<double>(
+                              isExpanded: true,
+                              isDense: true,
+                              dropdownColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black),
                               value: [20.0, 10.0, 5.5, 0.0].contains(tvaR)
                                   ? tvaR
                                   : 20.0,
-                              items: [20.0, 10.0, 5.5, 0.0].map((t) =>
+                              items: [20.0, 10.0, 5.5, 0.0].map((val) =>
                                   DropdownMenuItem(
-                                      value: t, child: Text('$t%'))).toList(),
+                                      value: val, child: Text('$val%', style: const TextStyle(fontSize: 11)))).toList(),
                               onChanged: (v) => setS(() => tvaR = v ?? 20.0),
-                              decoration: const InputDecoration(
-                                  labelText: 'TVA'),
+                              decoration: _getInputDecoration(t.tva_label, isDark: isDark, dense: true),
                             ),
                           ),
                         ],
@@ -206,24 +238,24 @@ void showQuoteDialog({
 
                       // Affichage TTC
                       Container(
-                        margin: const EdgeInsets.only(top: 10),
-                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(top: 16),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8)),
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(12)),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text("TOTAL TTC :",
-                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text(t.totalTTC + ' :',
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                             Text(
                               "${((double.tryParse(
                                   htC.text.replaceAll(',', '.')) ?? 0) * (1 +
                                   tvaR / 100)).toStringAsFixed(
                                   2)} $selectedCurrency",
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
+                                  color: primaryColor,
                                   fontSize: 16),
                             ),
                           ],
@@ -234,6 +266,12 @@ void showQuoteDialog({
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
                           onPressed: () {
                             if (entityId == null || selectedPartnerId == null ||
                                 numC.text.isEmpty) return;
@@ -256,7 +294,7 @@ void showQuoteDialog({
                               amountHT: ht,
                               tva: tva,
                               amountTTC: ht + tva,
-                              paymentTerms: paymentTerms ?? '30 jours',
+                              paymentTerms: paymentTerms ?? t.thirtyDays,
                               expenseAccount: selectedProductAccount,
                               status: quoteToEdit?.status ??
                                   InvoiceStatus.draft,
@@ -264,7 +302,7 @@ void showQuoteDialog({
                             onSave(newQuote);
                             Navigator.pop(context);
                           },
-                          child: const Text('ENREGISTRER LE DEVIS'),
+                          child: Text(t.save.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],

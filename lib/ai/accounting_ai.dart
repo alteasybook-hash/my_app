@@ -2,121 +2,160 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/invoice.dart';
-import '../models/bank_transaction.dart';
+import '../models/budget_models.dart';
+import '../models/entity.dart';
+import '../models/employee.dart';
+import 'package:flutter/foundation.dart';
 
 class AccountingAI {
-  final GenerativeModel _model;
+  final GenerativeModel _chatModel;
+  final String apiKey;
 
   AccountingAI({required String apiKey})
-      : _model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
+      : apiKey = apiKey.replaceAll(';', '').trim(),
+        _chatModel = GenerativeModel(
+          model: 'gemini-flash-latest',
+          apiKey: apiKey.replaceAll(';', '').trim(),
+          requestOptions: const RequestOptions(apiVersion: 'v1beta'),
+        );
 
-  /// Analyse une opération comptable avec plus de contexte
-  Future<Map<String, dynamic>> analyzeInvoice({
-    required String label,
-    required double amount,
-    String? supplier, String? history,
-    String? lastAccount,
-    List<String>? keywords,
-  }) async {
-    final prompt = """
-    Analyse cette opération comptable.
-    Libellé: "$label"
-    Montant: $amount €
-    Plan comptable français.
-    Réponds en JSON:
-    {"account": "606", "vat_rate": 20, "category": "Fournitures", "confidence": 0.92}
-    """;
-
-    try {
-      final response = await _model.generateContent([Content.text(prompt)]);
-      final text = response.text ?? "{}";
-      final jsonStart = text.indexOf('{');
-      final jsonEnd = text.lastIndexOf('}') + 1;
-      if (jsonStart == -1) return {"account": "606", "vat_rate": 20.0, "category": "Divers", "confidence": 0.5};
-      return json.decode(text.substring(jsonStart, jsonEnd));
-    } catch (e) {
-      return {"account": "606", "vat_rate": 20.0, "category": "Erreur", "confidence": 0.0};
-    }
-  }
-
-  /// RESTAURATION : Extraction OCR des données d'une facture depuis un fichier
-  Future<Map<String, dynamic>> extractInvoiceDataFromPath(String path) async {
-    final fileBytes = await File(path).readAsBytes();
-    final prompt = [
-      Content.multi([
-        TextPart("Analyse cette image de facture et extrais : le numéro de facture (number), le nom du fournisseur (supplier), la date (date au format YYYY-MM-DD), le montant HT (amountHT), le montant TVA (tva), et le montant TTC (amountTTC). Réponds uniquement en JSON."),
-        DataPart('image/jpeg', fileBytes),
-      ])
-    ];
-
-    try {
-      final response = await _model.generateContent(prompt);
-      final text = response.text ?? "{}";
-      final jsonStart = text.indexOf('{');
-      final jsonEnd = text.lastIndexOf('}') + 1;
-      if (jsonStart == -1) return {};
-      return json.decode(text.substring(jsonStart, jsonEnd));
-    } catch (e) {
-      print("Erreur OCR IA: $e");
-      return {};
-    }
-  }
-
-  /// RESTAURATION : Génération d'un email de relance
-  Future<String> generateReminderEmail({
-    required String customerName,
-    required String invoiceNumber,
-    required double amount,
-    required String dueDate,
-  }) async {
-    final prompt = """
-    Rédige un email de relance de paiement amical et professionnel.
-    Client: $customerName, Facture n°: $invoiceNumber, Montant: $amount €, Échéance: $dueDate.
-    Réponds uniquement avec le corps du texte.
-    """;
-
-    try {
-      final response = await _model.generateContent([Content.text(prompt)]);
-      return response.text ?? "Impossible de générer le mail.";
-    } catch (e) {
-      return "Erreur lors de la génération : $e";
-    }
-  }
-
-  List<Map<String, dynamic>> autoMatch({
-    required List<BankTransaction> bankTransactions,
+  Future<String> chatWithContext({
+    required String userMessage,
     required List<Invoice> invoices,
-    required List<BankTransaction> softwareTransactions,
-  }) {
-    List<Map<String, dynamic>> suggestions = [];
-    for (var bTx in bankTransactions.where((t) => t.id.startsWith('csv-') && !t.isReconciled)) {
-      for (var inv in invoices.where((i) => !i.isReconciled)) {
-        double invAmount = inv.type == InvoiceType.achat ? -inv.amountTTC : inv.amountTTC;
-        if ((bTx.amount - invAmount).abs() < 0.01) {
-          int diffDays = bTx.date.difference(inv.date).inDays.abs();
-          if (diffDays <= 7) {
-            suggestions.add({
-              'bankTxId': bTx.id,
-              'softwareId': inv.id,
-              'type': 'invoice',
-              'confidence': diffDays == 0 ? 1.0 : 0.8,
-              'label': inv.supplierOrClientName
-            });
-          }
-        }
+    required List<EntityBudget> budgets,
+    required List<Entity> entities,
+    required String currentPlan,
+    required List<Employee> employees,
+  }) async {
+    if (apiKey.isEmpty) {
+      return "Erreur : Clé API manquante dans le fichier .env";
+    }
+
+    final now = DateTime.now();
+    final threeMonthsAgo = now.subtract(const Duration(days: 90));
+
+    Map<String, double> salesByCurrency = {};
+    Map<String, double> expensesByCurrency = {};
+
+    for (var inv in invoices) {
+      if (inv.type == InvoiceType.vente) {
+        salesByCurrency[inv.currency] = (salesByCurrency[inv.currency] ?? 0.0) + inv.amountTTC;
+      } else if (inv.type == InvoiceType.achat) {
+        expensesByCurrency[inv.currency] = (expensesByCurrency[inv.currency] ?? 0.0) + inv.amountTTC;
       }
     }
-    return suggestions;
+
+    Set<String> allClients = invoices.where((i) => i.type == InvoiceType.vente).map((i) => i.supplierOrClientName).toSet();
+    Set<String> activeClients = invoices.where((i) => i.type == InvoiceType.vente && i.date.isAfter(threeMonthsAgo)).map((i) => i.supplierOrClientName).toSet();
+    List<String> lostClients = allClients.difference(activeClients).toList();
+
+    String entitiesList = entities.isEmpty
+        ? "Aucune entité enregistrée."
+        : entities.map((e) => "- ${e.name} (ID: ${e.id}, Pays: ${e.country}, Devise: ${e.currency})").join("\n");
+
+    final prompt = """
+Tu es "alt.", un assistant financier intelligent.
+
+CONTEXTE :
+1. ENTITÉS DISPONIBLES : 
+$entitiesList
+
+2. RÉSUMÉ COMPTABLE :
+- Plan comptable utilisé : $currentPlan
+- Chiffre d'affaires (Ventes) : ${_formatCurrencyMap(salesByCurrency)}
+- Dépenses totales : ${_formatCurrencyMap(expensesByCurrency)}
+- Nombre de salariés : ${employees.length}
+- Clients inactifs (> 90 jours) : ${lostClients.isEmpty ? 'Aucun' : lostClients.join(', ')}
+
+3. STATISTIQUES :
+- Factures totales : ${invoices.length}
+- Budgets actifs : ${budgets.length}
+
+RÈGLES DE RÉPONSE :
+- Réponds uniquement dans la langue de l'utilisateur.
+- Ne mélange jamais plusieurs langues.
+- Traduis automatiquement toutes les phrases système dans la langue utilisée.
+- Reste factuel.
+
+QUESTION : "$userMessage"
+""";
+
+    try {
+      final content = [Content.text(prompt)];
+      final response = await _chatModel.generateContent(content);
+      return (response.text ?? "Désolé, je n'ai pas pu générer de réponse.").trim();
+    } catch (e) {
+      return "Erreur de connexion IA : $e";
+    }
   }
 
-  bool detectDuplicateInvoice(Invoice newInvoice, List<Invoice> existingInvoices) {
-    for (var existing in existingInvoices) {
-      if (newInvoice.number.isNotEmpty && existing.number.isNotEmpty && newInvoice.number.trim().toLowerCase() == existing.number.trim().toLowerCase()) return true;
-      final samePartner = newInvoice.supplierOrClientName.trim().toLowerCase() == existing.supplierOrClientName.trim().toLowerCase();
-      final sameAmount = (newInvoice.amountTTC - existing.amountTTC).abs() < 0.01;
-      final sameDate = newInvoice.date.year == existing.date.year && newInvoice.date.month == existing.date.month && newInvoice.date.day == existing.date.day;
-      if (samePartner && sameAmount && sameDate) return true;
+  String _formatCurrencyMap(Map<String, double> map) {
+    if (map.isEmpty) return "0.00";
+    return map.entries.map((e) => "${e.value.toStringAsFixed(2)} ${e.key}").join(", ");
+  }
+
+  // --- EXTRACTION MULTIMODALE (PDF & IMAGES) ---
+  Future<Map<String, dynamic>> extractInvoiceDataFromPath(String path) async {
+    try {
+      final file = File(path);
+      final fileBytes = await file.readAsBytes();
+      
+      // Détection dynamique du type MIME
+      String mimeType = 'image/jpeg';
+      if (path.toLowerCase().endsWith('.pdf')) {
+        mimeType = 'application/pdf';
+      } else if (path.toLowerCase().endsWith('.png')) {
+        mimeType = 'image/png';
+      }
+
+      final prompt = [
+        Content.multi([
+          TextPart("""
+          Analyse ce document (Facture ou Note de frais).
+          Extrais les informations suivantes au format JSON uniquement :
+          {
+           "supplierName": "nom du fournisseur",
+           "invoiceNumber": "numéro de facture",
+           "date": "YYYY-MM-DD",
+           "amountTTC": nombre,
+           "amountHT": nombre,
+           "tva": nombre,
+           "tvaRate": nombre,
+           "currency": "EUR",
+           "type": "achat",
+           "siren": "9 chiffres",
+           "vatNumber": "numéro TVA intra",
+           "iban": "si présent",
+           "category": "RESTAURANT, TAXI, HOTEL, TRAIN, CARBURANT, ACHAT_BIENS, ou AUTRE"
+           }
+
+          Si une info est manquante, mets null.
+          Réponds uniquement avec le JSON.
+          """),
+          DataPart(mimeType, fileBytes),
+        ])
+      ];
+
+      final response = await _chatModel.generateContent(prompt);
+      return _cleanAndDecodeJson(response.text);
+    } catch (e) {
+      debugPrint("Erreur Extraction Gemini : $e");
+      return {'error': 'L\'IA n\'a pas pu analyser ce document : $e'};
     }
-    return false;
+  }
+
+  Map<String, dynamic> _cleanAndDecodeJson(String? text) {
+    if (text == null || text.trim().isEmpty) return {};
+    String cleanText = text.trim();
+    if (cleanText.contains('```json')) {
+      cleanText = cleanText.split('```json')[1].split('```')[0].trim();
+    } else if (cleanText.contains('```')) {
+      cleanText = cleanText.split('```')[1].split('```')[0].trim();
+    }
+    try {
+      return json.decode(cleanText);
+    } catch (e) {
+      return {'error': 'L\'IA a renvoyé un format invalide.'};
+    }
   }
 }

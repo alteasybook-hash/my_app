@@ -24,8 +24,20 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+    <string>We need access to your photo library to select media.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Allow access to your gallery</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<key>NSCameraUsageDescription</key>
+	<string>Cette application utilise l'appareil photo pour scanner vos factures conformément aux normes 2026.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Accès requis pour importer des documents PDF ou des images de factures depuis votre galerie.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Accès requis pour la capture vidéo.</string>
+
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

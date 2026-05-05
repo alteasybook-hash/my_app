@@ -15,7 +15,7 @@ dependencies:
   intl: ^0.20.2
   http: ^1.6.0
   cupertino_icons: ^1.0.8
-  firebase_core: ^4.5.0
+  firebase_core: ^4.6.0
   path_provider: ^2.1.5
   shared_preferences: ^2.5.2
   file_picker: ^10.3.10
@@ -29,10 +29,15 @@ dependencies:
   url_launcher: ^6.2.0
   intl_phone_field: ^3.2.0
   flutter_dotenv: ^6.0.0
-  # Missing dependencies added below
-  edge_detection: ^1.1.3
-  google_mlkit_text_recognition: ^0.14.0
+  crypto: ^3.0.5
+  cunning_document_scanner: ^1.1.0
+  google_mlkit_text_recognition: ^0.15.1
+  gallery_media_picker: ^0.3.0
   pdfx: ^2.9.2
+  fl_chart: ^0.70.2
+  permission_handler: ^11.3.1 # Ajout pour gérer les permissions
+
+
 
 
 dev_dependencies:

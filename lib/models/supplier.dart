@@ -7,6 +7,7 @@ class Supplier {
   final String paymentTerms; // Immediat, 15 jours, 30 jours
   final String? siret;
   final String? vatin; // N° TVA Intra
+  final String entityId; // 🔥 L'entité à laquelle appartient ce tiers (obligatoire)
 
   Supplier({
     required this.id,
@@ -17,6 +18,7 @@ class Supplier {
     required this.paymentTerms,
     this.siret,
     this.vatin,
+    required this.entityId,
   });
 
   factory Supplier.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class Supplier {
       paymentTerms: json['paymentTerms'] ?? '30 jours',
       siret: json['siret'],
       vatin: json['vatin'],
+      entityId: json['entityId'] ?? '', // Devrait être géré lors de la migration/création
     );
   }
 
@@ -41,5 +44,6 @@ class Supplier {
     'paymentTerms': paymentTerms,
     'siret': siret,
     'vatin': vatin,
+    'entityId': entityId,
   };
 }

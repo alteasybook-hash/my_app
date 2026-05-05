@@ -20,12 +20,10 @@ class _AdministrationPageState extends State<AdministrationPage>
   final Color primaryColor = const Color(0xFF49F6C7);
 
   List<Entity> _entities = [];
+  List<InvoicingConfig> _invoicingConfigs = [];
   List<Map<String, dynamic>> _documents = [];
   bool _isLoading = true;
   bool _isDocsUnlocked = false;
-
-  File? _pickedLogo;
-  String? _existingLogoPath;
 
   @override
   void initState() {
@@ -40,9 +38,11 @@ class _AdministrationPageState extends State<AdministrationPage>
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final entities = await _apiService.fetchEntities();
+    final configs = await _apiService.fetchInvoicingConfigs();
     final docs = await _apiService.fetchCompanyDocuments();
     setState(() {
       _entities = entities;
+      _invoicingConfigs = configs;
       _documents = docs;
       _isLoading = false;
     });
@@ -55,6 +55,7 @@ class _AdministrationPageState extends State<AdministrationPage>
   }
 
   Future<void> _unlockDocuments() async {
+    final t = AppLocalizations.of(context);
     final pinC = TextEditingController();
     final pin = await _apiService.getAdminPin();
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -70,28 +71,28 @@ class _AdministrationPageState extends State<AdministrationPage>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF1E1E2C) : Colors.white,
-        title: Text("Code PIN requis", style: TextStyle(color: isDark ? Colors.white : Colors.black)),
+        title: Text(t.pinRequired, style: TextStyle(color: isDark ? Colors.white : Colors.black)),
         content: TextField(
           controller: pinC,
           obscureText: true,
           keyboardType: TextInputType.number,
           style: TextStyle(color: isDark ? Colors.white : Colors.black),
-          decoration: const InputDecoration(labelText: "Entrez le code secret", labelStyle: TextStyle(color: Colors.grey)),
+          decoration: InputDecoration(labelText: t.validate, labelStyle: const TextStyle(color: Colors.grey)),
           autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ANNULER", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t.cancel, style: const TextStyle(color: Colors.grey))),
           ElevatedButton(
             onPressed: () {
               if (pinC.text == pin) {
                 setState(() => _isDocsUnlocked = true);
                 Navigator.pop(ctx);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Code erroné")));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.invalidPin)));
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-            child: const Text("VALIDER", style: TextStyle(color: Colors.black)),
+            child: Text(t.validate, style: const TextStyle(color: Colors.black)),
           )
         ],
       ),
@@ -121,10 +122,13 @@ class _AdministrationPageState extends State<AdministrationPage>
     final addressController = TextEditingController(text: entity?.address ?? '');
 
     String selectedCountry = entity?.country ?? 'France';
-    String selectedCurrency = entity?.currency ?? 'EUR';
+    String selectedAccountingPlan = entity?.accountingPlan ?? 'France (PCG)';
+    List<String> selectedCurrencies = List.from(entity?.currencies ?? ['EUR']);
+
+    String selectedInvoicingType = entity?.invoicingType ?? (selectedCountry == 'France' ? 'pdp' : 'classic');
+    String? selectedConfigId = entity?.invoicingConfigId;
+
     bool isDefault = entity?.isDefault ?? false;
-    _existingLogoPath = entity?.logoPath;
-    _pickedLogo = null;
 
     showModalBottomSheet(
       context: context,
@@ -133,6 +137,16 @@ class _AdministrationPageState extends State<AdministrationPage>
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
+
+          // 🔥 FILTER CONFIGS BY COUNTRY
+          List<InvoicingConfig> countryConfigs = _invoicingConfigs
+              .where((c) => c.country == selectedCountry)
+              .toList();
+          
+          if (selectedConfigId != null && !countryConfigs.any((c) => c.id == selectedConfigId)) {
+            selectedConfigId = null;
+          }
+
           return Container(
             height: MediaQuery.of(context).size.height * 0.9,
             decoration: BoxDecoration(
@@ -141,73 +155,129 @@ class _AdministrationPageState extends State<AdministrationPage>
             ),
             padding: const EdgeInsets.all(24),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
                 Text(
-                  isReadOnly ? 'Détails Entité' : (entity == null ? 'Nouvelle Entité' : 'Modifier Entité'),
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black),
+                  entity == null ? "Nouvelle entité" : "Modifier entité",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
                 ),
-                const Divider(height: 32),
+                const SizedBox(height: 20),
                 Expanded(
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
-                        _buildField(nameController, 'Raison Sociale *', enabled: !isReadOnly),
-                        _buildField(idController, 'SIRET / ID Unique *', enabled: !isReadOnly),
-                        Row(
-                          children: [
-                            Expanded(child: _buildDropdownField('Pays *', selectedCountry, ['France', 'Allemagne', 'Belgique', 'Suisse', 'Luxembourg', 'Canada'], !isReadOnly, (val) => setModalState(() => selectedCountry = val!))),
-                            const SizedBox(width: 12),
-                            Expanded(child: _buildDropdownField('Devise *', selectedCurrency, ['EUR', 'GBP', 'USD', 'CHF', 'CAD'], !isReadOnly, (val) => setModalState(() => selectedCurrency = val!))),
-                          ],
-                        ),
-                        _buildField(vatController, 'Numéro de TVA', enabled: !isReadOnly),
-                        _buildField(emailController, 'Email *', enabled: !isReadOnly),
-                        _buildField(addressController, 'Adresse *', enabled: !isReadOnly, maxLines: 2),
-
-                        const SizedBox(height: 20),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text("Logo de l'entreprise", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-                        ),
-                        const SizedBox(height: 10),
-                        GestureDetector(
-                          onTap: isReadOnly ? null : () async {
-                            FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.image);
-                            if (result != null) {
-                              setModalState(() { _pickedLogo = File(result.files.single.path!); });
-                            }
+                        _buildField(nameController, "Nom"),
+                        _buildField(idController, "SIRET / ID"),
+                        
+                        _buildDropdownField(
+                          "Pays",
+                          selectedCountry,
+                          ['France', 'UK', 'Germany', 'USA'],
+                          !isReadOnly,
+                          (val) {
+                            setModalState(() {
+                              selectedCountry = val!;
+                              // Update related defaults
+                              if (selectedCountry == 'France') {
+                                selectedAccountingPlan = 'France (PCG)';
+                                selectedInvoicingType = 'pdp';
+                              } else if (selectedCountry == 'UK') {
+                                selectedAccountingPlan = 'UK (COA)';
+                                selectedInvoicingType = 'classic';
+                              } else if (selectedCountry == 'Germany') {
+                                selectedAccountingPlan = 'Germany (DATEV)';
+                                selectedInvoicingType = 'classic';
+                              } else {
+                                selectedAccountingPlan = 'USA (GAAP)';
+                                selectedInvoicingType = 'classic';
+                              }
+                            });
                           },
-                          child: Container(
-                            height: 120,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade300),
-                              borderRadius: BorderRadius.circular(12),
-                              color: isDark ? const Color(0xFF232435) : Colors.grey.shade50,
-                            ),
-                            child: _pickedLogo != null
-                                ? Image.file(_pickedLogo!, fit: BoxFit.contain)
-                                : (_existingLogoPath != null && _existingLogoPath!.isNotEmpty
-                                ? Image.file(File(_existingLogoPath!), fit: BoxFit.contain)
-                                : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.add_photo_alternate_outlined, color: Colors.grey, size: 40),
-                                Text("Ajouter un logo", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                              ],
-                            )),
-                          ),
                         ),
-                        if (!isReadOnly)
-                          SwitchListTile(
-                            title: Text('Entité par défaut', style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-                            value: isDefault,
-                            onChanged: (v) => setModalState(() => isDefault = v),
-                            activeColor: primaryColor,
+
+                        _buildDropdownField(
+                          "Plan Comptable",
+                          selectedAccountingPlan,
+                          ['France (PCG)', 'UK (COA)', 'Germany (DATEV)', 'USA (GAAP)'],
+                          !isReadOnly,
+                          (val) => setModalState(() => selectedAccountingPlan = val!),
+                        ),
+
+                        const SizedBox(height: 12),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text("Devises autorisées", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        ),
+                        Wrap(
+                          spacing: 8,
+                          children: ['EUR', 'USD', 'GBP', 'CHF'].map((c) {
+                            final isSelected = selectedCurrencies.contains(c);
+                            return FilterChip(
+                              label: Text(c),
+                              selected: isSelected,
+                              onSelected: isReadOnly ? null : (selected) {
+                                setModalState(() {
+                                  if (selected) {
+                                    selectedCurrencies.add(c);
+                                  } else if (selectedCurrencies.length > 1) {
+                                    selectedCurrencies.remove(c);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+
+                        const SizedBox(height: 12),
+                        _buildDropdownField(
+                          "Type de facturation",
+                          selectedInvoicingType,
+                          ['classic', 'pdp', 'chorus'],
+                          !isReadOnly,
+                          (val) => setModalState(() => selectedInvoicingType = val!),
+                        ),
+
+                        if (selectedInvoicingType != 'classic') ...[
+                          const SizedBox(height: 12),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text("Configuration API / Provider", style: TextStyle(fontSize: 12, color: Colors.grey)),
                           ),
-                        const SizedBox(height: 30),
+                          DropdownButton<String>(
+                            value: selectedConfigId,
+                            hint: const Text("Choisir une configuration"),
+                            isExpanded: true,
+                            dropdownColor: isDark ? const Color(0xFF232435) : Colors.white,
+                            style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                            items: countryConfigs.map((c) => DropdownMenuItem(
+                              value: c.id,
+                              child: Text("${c.name} (${c.provider})"),
+                            )).toList(),
+                            onChanged: isReadOnly ? null : (val) => setModalState(() => selectedConfigId = val),
+                          ),
+                          if (countryConfigs.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 4),
+                              child: Text(
+                                "Aucune configuration API trouvée pour ce pays. Configurez-les dans les Paramètres.",
+                                style: TextStyle(color: Colors.orange, fontSize: 11),
+                              ),
+                            ),
+                        ],
+
+                        const SizedBox(height: 12),
+                        _buildField(vatController, "N° TVA"),
+                        _buildField(emailController, "Email"),
+                        _buildField(addressController, "Adresse"),
+
+                        SwitchListTile(
+                          title: const Text("Entité par défaut"),
+                          value: isDefault,
+                          onChanged: isReadOnly ? null : (v) => setModalState(() => isDefault = v),
+                        ),
                       ],
                     ),
                   ),
@@ -215,33 +285,39 @@ class _AdministrationPageState extends State<AdministrationPage>
                 if (!isReadOnly)
                   SizedBox(
                     width: double.infinity,
-                    height: 55,
                     child: ElevatedButton(
                       onPressed: () async {
-                        if (nameController.text.isEmpty) return;
                         final newEntity = Entity(
                           id: entity?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                          name: nameController.text.trim(),
-                          idNumber: idController.text.trim(),
-                          vatNumber: vatController.text.trim(),
-                          email: emailController.text.trim(),
-                          address: addressController.text.trim(),
+                          name: nameController.text,
+                          idNumber: idController.text,
+                          vatNumber: vatController.text,
+                          email: emailController.text,
+                          address: addressController.text,
                           country: selectedCountry,
-                          currency: selectedCurrency,
+                          accountingPlan: selectedAccountingPlan,
+                          currencies: selectedCurrencies,
+                          invoicingType: selectedInvoicingType,
+                          invoicingConfigId: selectedConfigId,
                           isDefault: isDefault,
-                          logoPath: _pickedLogo?.path ?? _existingLogoPath,
                         );
 
-                        if (entity == null) await _apiService.createEntity(newEntity);
-                        else await _apiService.updateEntity(entity.id, newEntity.toJson());
-
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          _loadData();
+                        if (entity == null) {
+                          await _apiService.createEntity(newEntity);
+                        } else {
+                          await _apiService.updateEntity(entity.id, newEntity.toJson());
                         }
+
+                        Navigator.pop(context);
+                        _loadData();
                       },
-                      style: ElevatedButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-                      child: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text("SAUVEGARDER", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
               ],
@@ -266,7 +342,7 @@ class _AdministrationPageState extends State<AdministrationPage>
           labelStyle: const TextStyle(color: Colors.grey),
           filled: true,
           fillColor: isDark ? const Color(0xFF232435) : (enabled ? Colors.white : Colors.grey.shade100),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: isDark ? BorderSide.none : const BorderSide()),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: isDark ? BorderSide.none : const BorderSide(color: Colors.grey)),
         ),
       ),
     );
@@ -274,19 +350,22 @@ class _AdministrationPageState extends State<AdministrationPage>
 
   Widget _buildDropdownField(String label, String value, List<String> items, bool enabled, Function(String?) onChanged) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        DropdownButton<String>(
-          value: value,
-          dropdownColor: isDark ? const Color(0xFF232435) : Colors.white,
-          isExpanded: true,
-          style: TextStyle(color: isDark ? Colors.white : Colors.black),
-          items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-          onChanged: enabled ? onChanged : null,
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          DropdownButton<String>(
+            value: value,
+            dropdownColor: isDark ? const Color(0xFF232435) : Colors.white,
+            isExpanded: true,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black),
+            items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+            onChanged: enabled ? onChanged : null,
+          ),
+        ],
+      ),
     );
   }
 
@@ -305,7 +384,7 @@ class _AdministrationPageState extends State<AdministrationPage>
               : Icon(Icons.business, color: isDark ? primaryColor : Colors.black),
         ),
         title: Text(e.name, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-        subtitle: Text(e.idNumber, style: const TextStyle(color: Colors.grey)),
+        subtitle: Text("${e.country} • ${e.idNumber}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
         trailing: IconButton(icon: Icon(Icons.edit_outlined, color: isDark ? Colors.white70 : Colors.black), onPressed: () => _showEntityForm(entity: e)),
         onTap: () => _showEntityForm(entity: e, isReadOnly: true),
       ),
@@ -317,9 +396,9 @@ class _AdministrationPageState extends State<AdministrationPage>
     final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: isDark ? const Color(0xFF1A1B2E) : Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(icon: Icon(Icons.arrow_back_ios, color: isDark ? primaryColor : Colors.black), onPressed: () => Navigator.pop(context)),
         title: Text(t.admin, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
@@ -328,7 +407,7 @@ class _AdministrationPageState extends State<AdministrationPage>
           labelColor: isDark ? primaryColor : Colors.black,
           unselectedLabelColor: Colors.grey,
           indicatorColor: primaryColor,
-          tabs: const [Tab(text: 'Entités'), Tab(text: 'Documents')],
+          tabs: [Tab(text: t.entities), Tab(text: t.documents)],
         ),
       ),
       body: _isLoading
@@ -348,19 +427,18 @@ class _AdministrationPageState extends State<AdministrationPage>
   }
 
   Widget? _buildFab() {
+    final t = AppLocalizations.of(context);
     if (_tabController.index == 0) {
-      return FloatingActionButton.extended(onPressed: () => _showEntityForm(), label: const Text('Ajouter Entité', style: TextStyle(color: Colors.black)), icon: const Icon(Icons.add_business, color: Colors.black), backgroundColor: primaryColor);
+      return FloatingActionButton.extended(onPressed: () => _showEntityForm(), label: Text(t.newEntity, style: const TextStyle(color: Colors.black)), icon: const Icon(Icons.add_business, color: Colors.black), backgroundColor: primaryColor);
     }
-    
-    // On n'affiche le FAB que si les documents sont déverrouillés
     if (_tabController.index == 1 && _isDocsUnlocked) {
       return FloatingActionButton.extended(onPressed: _pickDocument, label: const Text('Ajouter Document', style: TextStyle(color: Colors.black)), icon: const Icon(Icons.upload_file, color: Colors.black), backgroundColor: primaryColor);
     }
-    
     return null;
   }
 
   Widget _buildDocumentsSection() {
+    final t = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (!_isDocsUnlocked) {
       return Center(
@@ -378,7 +456,7 @@ class _AdministrationPageState extends State<AdministrationPage>
             ElevatedButton.icon(
               onPressed: _unlockDocuments,
               icon: const Icon(Icons.lock_open),
-              label: const Text("DÉVERROUILLER"),
+              label: Text(t.validate.toUpperCase()),
               style: ElevatedButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Colors.black),
             )
           ],
@@ -387,7 +465,7 @@ class _AdministrationPageState extends State<AdministrationPage>
     }
 
     if (_documents.isEmpty) {
-      return Center(child: Text("Aucun document entreprise.", style: TextStyle(color: isDark ? Colors.grey : Colors.grey)));
+      return Center(child: Text("Aucun document entreprise.", style: TextStyle(color: Colors.grey)));
     }
 
     return ListView.builder(
@@ -403,7 +481,7 @@ class _AdministrationPageState extends State<AdministrationPage>
           child: ListTile(
             leading: const Icon(Icons.description, color: Colors.blue),
             title: Text(doc['name'] ?? 'Doc', style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-            subtitle: Text(doc['date'] != null ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(doc['date'])) : '', style: const TextStyle(color: Colors.grey)),
+            subtitle: Text(doc['date'] != null ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(doc['date'])) : ''),
             trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () async { await _apiService.deleteCompanyDocument(doc['id']); _loadData(); }),
           ),
         );
