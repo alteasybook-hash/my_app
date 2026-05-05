@@ -6,6 +6,9 @@
 .pub-cache/
 .pub/
 build/
+local.properties
+.ssh
+
 
 
 **/GeneratedPluginRegistrant.*
